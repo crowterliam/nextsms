@@ -315,6 +315,133 @@ export interface LeagueMember {
   joined_at: string;
 }
 
+export interface Season {
+  id: number;
+  league_id: string;
+  season_number: number;
+  name: string;
+  status: 'setup' | 'active' | 'completed' | 'archived';
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface Division {
+  id: number;
+  league_id: string;
+  season_id: number;
+  name: string;
+  level: number;
+  promotion_spots: number;
+  relegation_spots: number;
+  playoff_spots: number;
+  created_at: string;
+}
+
+export interface DivisionTeam {
+  id: number;
+  division_id: number;
+  team_id: number;
+  season_id: number;
+}
+
+export interface Competition {
+  id: number;
+  league_id: string;
+  season_id: number;
+  division_id: number | null;
+  name: string;
+  type: 'league' | 'cup' | 'supercup' | 'shield' | 'playoff' | 'friendly';
+  format: 'round_robin' | 'knockout' | 'group_knockout' | 'two_legged_knockout';
+  status: 'setup' | 'active' | 'completed' | 'archived';
+  settings: string;
+  created_at: string;
+}
+
+export interface CompetitionStage {
+  id: number;
+  competition_id: number;
+  name: string;
+  stage_order: number;
+  format: 'round_robin' | 'knockout' | 'group_knockout' | 'two_legged_knockout';
+  num_groups: number;
+  teams_advancing: number;
+  num_legs: number;
+  config: string;
+  status: 'setup' | 'active' | 'completed';
+  created_at: string;
+}
+
+export interface CompetitionGroup {
+  id: number;
+  stage_id: number;
+  name: string;
+}
+
+export interface CompetitionGroupTeam {
+  id: number;
+  group_id: number;
+  team_id: number;
+  seed_position: number | null;
+}
+
+export interface CompetitionFixture {
+  id: number;
+  competition_id: number;
+  stage_id: number;
+  group_id: number | null;
+  home_team_id: number;
+  away_team_id: number;
+  match_id: number | null;
+  round_name: string | null;
+  leg: number;
+  bracket_position: number | null;
+  scheduled_week: number | null;
+  status: 'scheduled' | 'played' | 'postponed' | 'cancelled';
+}
+
+export interface CompetitionStanding {
+  id: number;
+  competition_id: number;
+  stage_id: number;
+  group_id: number | null;
+  team_id: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+}
+
+export interface SeasonHistory {
+  id: number;
+  league_id: string;
+  season_id: number;
+  category: string;
+  division_id: number | null;
+  data: string;
+  created_at: string;
+}
+
+export const COMPETITION_TYPES = [
+  { type: 'league', name: 'League' },
+  { type: 'cup', name: 'Cup' },
+  { type: 'supercup', name: 'Super Cup' },
+  { type: 'shield', name: 'Shield' },
+  { type: 'playoff', name: 'Playoff' },
+  { type: 'friendly', name: 'Friendly' },
+] as const;
+
+export const COMPETITION_FORMATS = [
+  { format: 'round_robin', name: 'Round Robin' },
+  { format: 'knockout', name: 'Knockout' },
+  { format: 'group_knockout', name: 'Group Stage + Knockout' },
+  { format: 'two_legged_knockout', name: 'Two-Legged Knockout' },
+] as const;
+
 export const FORMATIONS = [
   '433', '442', '451', '352', '343', '532', '541', '4231', '4141', '4222', '3511', '3412', '31312', '32122',
 ] as const;

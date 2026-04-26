@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LeagueFixturesPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
   const [fixtures, setFixtures] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -14,6 +15,8 @@ export default function LeagueFixturesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [leagueStatus, setLeagueStatus] = useState('');
   const [adminAction, setAdminAction] = useState<string | null>(null);
+  const [seasonName, setSeasonName] = useState('');
+  const [hasSeason, setHasSeason] = useState(true);
 
   useEffect(() => {
     fetchLeagueAndFixtures();
@@ -29,6 +32,8 @@ export default function LeagueFixturesPage() {
       const league = await leagueRes.json();
       setIsAdmin(league.userRole === 'owner' || league.userRole === 'admin');
       setLeagueStatus(league.status);
+      setSeasonName(league.currentSeason?.name || `Season ${league.season}`);
+      setHasSeason(league.seasonId !== null);
     }
 
     if (fixturesRes?.ok) {
@@ -93,6 +98,28 @@ export default function LeagueFixturesPage() {
     setAdminAction(null);
   };
 
+  if (!hasSeason && !loading) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+          <span>/</span>
+          <span>Fixtures</span>
+        </div>
+        <h1 className="text-2xl font-bold mb-6">Fixtures</h1>
+        <div className="text-center py-12 border border-border rounded-lg bg-card">
+          <p className="text-muted-foreground mb-4">No season has been created yet.</p>
+          <button
+            onClick={() => router.push(`/leagues/${slug}`)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+          >
+            Go to League Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const grouped = fixtures.reduce<Record<number, Array<Record<string, unknown>>>>((acc, f) => {
     const week = f.week as number;
     if (!acc[week]) acc[week] = [];
@@ -104,6 +131,8 @@ export default function LeagueFixturesPage() {
     <div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
         <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+        <span>/</span>
+        <span>{seasonName}</span>
         <span>/</span>
         <span>Fixtures</span>
       </div>

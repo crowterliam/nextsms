@@ -31,6 +31,10 @@ export async function POST(
   if (adminError) return adminError;
 
   const doStub = getLeagueDO(slug);
+  const state = await doStub.getState();
+  if (!state?.seasonId) {
+    return NextResponse.json({ error: "No active season. Create a season first." }, { status: 400 });
+  }
   const result = await doStub.advanceWeek(league.id);
   return NextResponse.json(result);
 }

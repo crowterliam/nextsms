@@ -9,9 +9,18 @@ import { simulateMatch } from "./simulator";
 import { configToLeagueConfig } from "./config";
 import { DEFAULT_CONFIG } from "./types";
 import type { Player, LeagueConfig, SimPlayer } from "./types";
+import {
+  generateKnockoutBracket,
+  generateTwoLeggedKnockoutBracket,
+  generateGroupDraw,
+  getAdvancingFromGroups,
+  generateNextKnockoutRound,
+  groupAdvancingToKnockoutSeedOrder,
+} from "./competition-engine";
 
 interface LeagueState {
   season: number;
+  seasonId: number | null;
   currentWeek: number;
   status: "setup" | "active" | "completed";
   name: string;
@@ -54,6 +63,7 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     if (this.state) return { success: false };
     this.state = {
       season: 1,
+      seasonId: null,
       currentWeek: 0,
       status: "setup",
       name,
@@ -775,6 +785,888 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     this.state = null;
 
     return { success: true };
+  }
+
+  async getSeasons(leagueId: string): Promise<Array<Record<string, unknown>>> {
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM seasons WHERE league_id = ? ORDER BY season_number DESC"
+    ).bind(leagueId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async getCurrentSeason(leagueId: string): Promise<Record<string, unknown> | null> {
+    if (this.state?.seasonId) {
+      const result = await this.env.DB.prepare(
+        "SELECT * FROM seasons WHERE id = ?"
+      ).bind(this.state.seasonId).first();
+      return result as Record<string, unknown> | null;
+    }
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM seasons WHERE league_id = ? ORDER BY season_number DESC LIMIT 1"
+    ).bind(leagueId).first();
+    return result as Record<string, unknown> | null;
+  }
+
+  async startNewSeason(leagueId: string, name?: string): Promise<{ success: boolean; seasonId?: number; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const currentSeason = await this.env.DB.prepare(
+      "SELECT season_number FROM seasons WHERE league_id = ? ORDER BY season_number DESC LIMIT 1"
+    ).bind(leagueId).first<{ season_number: number }>();
+
+    const nextNumber = (currentSeason?.season_number ?? 0) + 1;
+    const seasonName = name || `Season ${nextNumber}`;
+
+    const insert = await this.env.DB.prepare(
+      "INSERT INTO seasons (league_id, season_number, name, status) VALUES (?, ?, ?, 'active')"
+    ).bind(leagueId, nextNumber, seasonName).run();
+
+    const seasonRow = await this.env.DB.prepare(
+      "SELECT id FROM seasons WHERE league_id = ? AND season_number = ?"
+    ).bind(leagueId, nextNumber).first<{ id: number }>();
+
+    if (!seasonRow) return { success: false, error: "Failed to create season" };
+
+    this.state.season = nextNumber;
+    this.state.seasonId = seasonRow.id;
+    this.state.currentWeek = 0;
+    this.state.status = "setup";
+    this.saveState();
+
+    await this.env.DB.prepare(
+      "UPDATE leagues SET season = ?, current_week = 0, status = 'setup' WHERE id = ?"
+    ).bind(nextNumber, leagueId).run();
+
+    return { success: true, seasonId: seasonRow.id };
+  }
+
+  async completeCurrentSeason(leagueId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.state || !this.state.seasonId) return { success: false, error: "No active season" };
+
+    const teams = await this.env.DB.prepare(
+      "SELECT id FROM teams WHERE league_id = ?"
+    ).bind(leagueId).all();
+
+    const standings = await this.env.DB.prepare(
+      `SELECT lt.*, t.name as team_name FROM league_table lt
+       JOIN teams t ON lt.team_id = t.id
+       WHERE lt.season = ? AND lt.league_id = ?
+       ORDER BY lt.points DESC, lt.goal_difference DESC, lt.goals_for DESC`
+    ).bind(this.state.season, leagueId).all();
+
+    const competitions = await this.env.DB.prepare(
+      "SELECT * FROM competitions WHERE season_id = ? AND league_id = ?"
+    ).bind(this.state.seasonId, leagueId).all();
+
+    await this.env.DB.prepare(
+      "INSERT INTO season_history (league_id, season_id, category, data) VALUES (?, ?, 'standings', ?)"
+    ).bind(leagueId, this.state.seasonId, JSON.stringify(standings.results)).run();
+
+    if (competitions.results?.length) {
+      for (const comp of competitions.results as Array<Record<string, unknown>>) {
+        const compId = comp.id;
+        const compFixtures = await this.env.DB.prepare(
+          "SELECT * FROM competition_fixtures WHERE competition_id = ?"
+        ).bind(compId).all();
+        await this.env.DB.prepare(
+          "INSERT INTO season_history (league_id, season_id, category, data) VALUES (?, ?, 'competition', ?)"
+        ).bind(leagueId, this.state.seasonId, JSON.stringify({ competition: comp, fixtures: compFixtures.results })).run();
+      }
+    }
+
+    const divisionCount = await this.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM divisions WHERE season_id = ?"
+    ).bind(this.state.seasonId).first<{ count: number }>();
+
+    if (divisionCount && divisionCount.count > 0) {
+      const divisions = await this.env.DB.prepare(
+        "SELECT * FROM divisions WHERE season_id = ?"
+      ).bind(this.state.seasonId).all();
+      const divisionData: Record<string, unknown> = {};
+      for (const div of divisions.results as Array<Record<string, unknown>>) {
+        const divStandings = await this.env.DB.prepare(
+          `SELECT cs.*, t.name as team_name FROM competition_standings cs
+           JOIN teams t ON cs.team_id = t.id
+           JOIN competitions c ON cs.competition_id = c.id
+           WHERE c.division_id = ? AND c.season_id = ?
+           ORDER BY cs.points DESC, cs.goal_difference DESC`
+        ).bind(div.id, this.state.seasonId).all();
+        divisionData[String(div.id)] = { division: div, standings: divStandings.results };
+      }
+      await this.env.DB.prepare(
+        "INSERT INTO season_history (league_id, season_id, category, data) VALUES (?, ?, 'divisions', ?)"
+      ).bind(leagueId, this.state.seasonId, JSON.stringify(divisionData)).run();
+    }
+
+    await this.env.DB.prepare(
+      "UPDATE seasons SET status = 'completed', completed_at = datetime('now') WHERE id = ?"
+    ).bind(this.state.seasonId).run();
+
+    await this.env.DB.prepare(
+      "UPDATE competitions SET status = 'completed' WHERE season_id = ?"
+    ).bind(this.state.seasonId).run();
+
+    this.state.status = "completed";
+    this.saveState();
+
+    await this.env.DB.prepare(
+      "UPDATE leagues SET status = 'completed' WHERE id = ?"
+    ).bind(leagueId).run();
+
+    return { success: true };
+  }
+
+  async getSeasonHistory(leagueId: string, seasonId?: number): Promise<Array<Record<string, unknown>>> {
+    if (seasonId) {
+      const result = await this.env.DB.prepare(
+        "SELECT * FROM season_history WHERE league_id = ? AND season_id = ? ORDER BY created_at"
+      ).bind(leagueId, seasonId).all();
+      return result.results as Array<Record<string, unknown>>;
+    }
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM season_history WHERE league_id = ? ORDER BY season_id DESC, created_at"
+    ).bind(leagueId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async createDivision(
+    leagueId: string,
+    seasonId: number,
+    name: string,
+    level: number,
+    promotionSpots: number = 0,
+    relegationSpots: number = 0,
+    playoffSpots: number = 0
+  ): Promise<{ success: boolean; divisionId?: number; error?: string }> {
+    const existing = await this.env.DB.prepare(
+      "SELECT id FROM divisions WHERE league_id = ? AND season_id = ? AND level = ?"
+    ).bind(leagueId, seasonId, level).first();
+    if (existing) return { success: false, error: "Division at this level already exists for this season" };
+
+    await this.env.DB.prepare(
+      "INSERT INTO divisions (league_id, season_id, name, level, promotion_spots, relegation_spots, playoff_spots) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(leagueId, seasonId, name, level, promotionSpots, relegationSpots, playoffSpots).run();
+
+    const div = await this.env.DB.prepare(
+      "SELECT id FROM divisions WHERE league_id = ? AND season_id = ? AND level = ?"
+    ).bind(leagueId, seasonId, level).first<{ id: number }>();
+
+    return { success: true, divisionId: div?.id };
+  }
+
+  async getDivisions(leagueId: string, seasonId: number): Promise<Array<Record<string, unknown>>> {
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM divisions WHERE league_id = ? AND season_id = ? ORDER BY level"
+    ).bind(leagueId, seasonId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async getDivisionTeams(divisionId: number): Promise<Array<Record<string, unknown>>> {
+    const result = await this.env.DB.prepare(
+      `SELECT dt.*, t.name as team_name, t.abbreviation FROM division_teams dt
+       JOIN teams t ON dt.team_id = t.id
+       WHERE dt.division_id = ? ORDER BY t.name`
+    ).bind(divisionId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async assignTeamToDivision(divisionId: number, teamId: number, seasonId: number): Promise<{ success: boolean; error?: string }> {
+    const existing = await this.env.DB.prepare(
+      "SELECT id FROM division_teams WHERE team_id = ? AND season_id = ?"
+    ).bind(teamId, seasonId).first();
+    if (existing) return { success: false, error: "Team already assigned to a division this season" };
+
+    await this.env.DB.prepare(
+      "INSERT INTO division_teams (division_id, team_id, season_id) VALUES (?, ?, ?)"
+    ).bind(divisionId, teamId, seasonId).run();
+    return { success: true };
+  }
+
+  async removeTeamFromDivision(divisionId: number, teamId: number): Promise<{ success: boolean }> {
+    await this.env.DB.prepare(
+      "DELETE FROM division_teams WHERE division_id = ? AND team_id = ?"
+    ).bind(divisionId, teamId).run();
+    return { success: true };
+  }
+
+  async autoAssignDivisions(leagueId: string, seasonId: number): Promise<{ success: boolean; assignments?: Record<number, number[]>; error?: string }> {
+    const divisions = await this.env.DB.prepare(
+      "SELECT id, level FROM divisions WHERE league_id = ? AND season_id = ? ORDER BY level"
+    ).bind(leagueId, seasonId).all<{ id: number; level: number }>();
+
+    if (!divisions.results?.length) return { success: false, error: "No divisions created" };
+
+    const teams = await this.env.DB.prepare(
+      "SELECT id FROM teams WHERE league_id = ? ORDER BY name"
+    ).bind(leagueId).all<{ id: number }>();
+
+    if (!teams.results?.length) return { success: false, error: "No teams in league" };
+
+    const standings = await this.env.DB.prepare(
+      `SELECT lt.team_id, lt.points, lt.goal_difference FROM league_table lt
+       WHERE lt.league_id = ? ORDER BY lt.points DESC, lt.goal_difference DESC`
+    ).bind(leagueId).all<{ team_id: number; points: number; goal_difference: number }>();
+
+    const standingMap = new Map(standings.results.map(s => [s.team_id, s]));
+    const sortedTeams = [...teams.results].sort((a, b) => {
+      const sa = standingMap.get(a.id);
+      const sb = standingMap.get(b.id);
+      if (!sa && !sb) return 0;
+      if (!sa) return 1;
+      if (!sb) return -1;
+      return sb.points - sa.points || sb.goal_difference - sa.goal_difference;
+    });
+
+    await this.env.DB.prepare(
+      "DELETE FROM division_teams WHERE season_id = ?"
+    ).bind(seasonId).run();
+
+    const teamsPerDivision = Math.ceil(sortedTeams.length / divisions.results.length);
+    const assignments: Record<number, number[]> = {};
+
+    for (let i = 0; i < divisions.results.length; i++) {
+      const divId = divisions.results[i].id;
+      assignments[divId] = [];
+      const start = i * teamsPerDivision;
+      const end = Math.min(start + teamsPerDivision, sortedTeams.length);
+      const batch: D1PreparedStatement[] = [];
+      const stmt = this.env.DB.prepare(
+        "INSERT INTO division_teams (division_id, team_id, season_id) VALUES (?, ?, ?)"
+      );
+      for (let j = start; j < end; j++) {
+        batch.push(stmt.bind(divId, sortedTeams[j].id, seasonId));
+        assignments[divId].push(sortedTeams[j].id);
+      }
+      if (batch.length) await this.env.DB.batch(batch);
+    }
+
+    return { success: true, assignments };
+  }
+
+  async deleteDivision(divisionId: number): Promise<{ success: boolean }> {
+    await this.env.DB.prepare("DELETE FROM division_teams WHERE division_id = ?").bind(divisionId).run();
+    await this.env.DB.prepare("DELETE FROM divisions WHERE id = ?").bind(divisionId).run();
+    return { success: true };
+  }
+
+  async createCompetition(
+    leagueId: string,
+    seasonId: number,
+    name: string,
+    type: string,
+    format: string,
+    divisionId?: number | null,
+    settings?: Record<string, unknown>
+  ): Promise<{ success: boolean; competitionId?: number; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    await this.env.DB.prepare(
+      "INSERT INTO competitions (league_id, season_id, division_id, name, type, format, status, settings) VALUES (?, ?, ?, ?, ?, ?, 'setup', ?)"
+    ).bind(leagueId, seasonId, divisionId ?? null, name, type, format, JSON.stringify(settings || {})).run();
+
+    const comp = await this.env.DB.prepare(
+      "SELECT id FROM competitions WHERE league_id = ? AND season_id = ? AND name = ? ORDER BY id DESC LIMIT 1"
+    ).bind(leagueId, seasonId, name).first<{ id: number }>();
+
+    return { success: true, competitionId: comp?.id };
+  }
+
+  async getCompetitions(leagueId: string, seasonId?: number): Promise<Array<Record<string, unknown>>> {
+    if (seasonId) {
+      const result = await this.env.DB.prepare(
+        "SELECT * FROM competitions WHERE league_id = ? AND season_id = ? ORDER BY type, name"
+      ).bind(leagueId, seasonId).all();
+      return result.results as Array<Record<string, unknown>>;
+    }
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM competitions WHERE league_id = ? ORDER BY season_id DESC, type, name"
+    ).bind(leagueId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async getCompetition(competitionId: number): Promise<Record<string, unknown> | null> {
+    const comp = await this.env.DB.prepare(
+      "SELECT * FROM competitions WHERE id = ?"
+    ).bind(competitionId).first();
+    return comp as Record<string, unknown> | null;
+  }
+
+  async deleteCompetition(competitionId: number, leagueId: string): Promise<{ success: boolean; error?: string }> {
+    const stages = await this.env.DB.prepare(
+      "SELECT id FROM competition_stages WHERE competition_id = ?"
+    ).bind(competitionId).all<{ id: number }>();
+
+    for (const stage of stages.results) {
+      const groups = await this.env.DB.prepare(
+        "SELECT id FROM competition_groups WHERE stage_id = ?"
+      ).bind(stage.id).all<{ id: number }>();
+
+      for (const group of groups.results) {
+        await this.env.DB.prepare("DELETE FROM competition_group_teams WHERE group_id = ?").bind(group.id).run();
+        await this.env.DB.prepare("DELETE FROM competition_standings WHERE group_id = ?").bind(group.id).run();
+      }
+      await this.env.DB.prepare("DELETE FROM competition_groups WHERE stage_id = ?").bind(stage.id).run();
+      await this.env.DB.prepare("DELETE FROM competition_standings WHERE stage_id = ?").bind(stage.id).run();
+    }
+
+    const compFixtures = await this.env.DB.prepare(
+      "SELECT match_id FROM competition_fixtures WHERE competition_id = ? AND match_id IS NOT NULL"
+    ).bind(competitionId).all<{ match_id: number }>();
+
+    for (const cf of compFixtures.results) {
+      await this.env.DB.prepare("DELETE FROM matches WHERE id = ?").bind(cf.match_id).run();
+    }
+
+    await this.env.DB.prepare("DELETE FROM competition_fixtures WHERE competition_id = ?").bind(competitionId).run();
+    await this.env.DB.prepare("DELETE FROM competition_stages WHERE competition_id = ?").bind(competitionId).run();
+    await this.env.DB.prepare("DELETE FROM competitions WHERE id = ?").bind(competitionId).run();
+
+    return { success: true };
+  }
+
+  async addCompetitionStage(
+    competitionId: number,
+    name: string,
+    format: string,
+    stageOrder: number,
+    numGroups: number = 0,
+    teamsAdvancing: number = 0,
+    numLegs: number = 1,
+    config?: Record<string, unknown>
+  ): Promise<{ success: boolean; stageId?: number; error?: string }> {
+    await this.env.DB.prepare(
+      "INSERT INTO competition_stages (competition_id, name, stage_order, format, num_groups, teams_advancing, num_legs, config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(competitionId, name, stageOrder, format, numGroups, teamsAdvancing, numLegs, JSON.stringify(config || {})).run();
+
+    const stage = await this.env.DB.prepare(
+      "SELECT id FROM competition_stages WHERE competition_id = ? AND stage_order = ?"
+    ).bind(competitionId, stageOrder).first<{ id: number }>();
+
+    if (numGroups > 0 && stage) {
+      const groupLetters = 'ABCDEFGHIJKLMNOP';
+      const batch: D1PreparedStatement[] = [];
+      const stmt = this.env.DB.prepare(
+        "INSERT INTO competition_groups (stage_id, name) VALUES (?, ?)"
+      );
+      for (let g = 0; g < numGroups; g++) {
+        batch.push(stmt.bind(stage.id, groupLetters[g] || `Group ${g + 1}`));
+      }
+      await this.env.DB.batch(batch);
+    }
+
+    return { success: true, stageId: stage?.id };
+  }
+
+  async getCompetitionStages(competitionId: number): Promise<Array<Record<string, unknown>>> {
+    const result = await this.env.DB.prepare(
+      "SELECT * FROM competition_stages WHERE competition_id = ? ORDER BY stage_order"
+    ).bind(competitionId).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async generateCompetitionFixtures(
+    competitionId: number,
+    leagueId: string,
+    teamIds?: number[],
+    stageId?: number
+  ): Promise<{ success: boolean; fixturesCount?: number; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const comp = await this.env.DB.prepare(
+      "SELECT * FROM competitions WHERE id = ?"
+    ).bind(competitionId).first<{ id: number; season_id: number; type: string; format: string; division_id: number | null }>();
+
+    if (!comp) return { success: false, error: "Competition not found" };
+
+    const stages = await this.env.DB.prepare(
+      "SELECT * FROM competition_stages WHERE competition_id = ? ORDER BY stage_order"
+    ).bind(competitionId).all<{
+      id: number; name: string; stage_order: number; format: string;
+      num_groups: number; teams_advancing: number; num_legs: number;
+    }>();
+
+    if (!stages.results?.length) return { success: false, error: "No stages defined" };
+
+    let currentTeamIds = teamIds;
+
+    if (!currentTeamIds) {
+      if (comp.division_id) {
+        const divTeams = await this.env.DB.prepare(
+          "SELECT team_id FROM division_teams WHERE division_id = ?"
+        ).bind(comp.division_id).all<{ team_id: number }>();
+        currentTeamIds = divTeams.results.map(t => t.team_id);
+      } else {
+        const allTeams = await this.env.DB.prepare(
+          "SELECT id FROM teams WHERE league_id = ?"
+        ).bind(leagueId).all<{ id: number }>();
+        currentTeamIds = allTeams.results.map(t => t.id);
+      }
+    }
+
+    if (!currentTeamIds || currentTeamIds.length < 2) {
+      return { success: false, error: "Need at least 2 teams" };
+    }
+
+    let totalFixtures = 0;
+    let startStageIdx = 0;
+
+    if (stageId) {
+      const idx = stages.results.findIndex(s => s.id === stageId);
+      if (idx >= 0) startStageIdx = idx;
+    }
+
+    for (let si = startStageIdx; si < stages.results.length; si++) {
+      const stage = stages.results[si];
+      const isLastStage = si === stages.results.length - 1;
+
+      await this.env.DB.prepare(
+        "DELETE FROM competition_fixtures WHERE stage_id = ?"
+      ).bind(stage.id).run();
+
+      if (stage.format === 'round_robin') {
+        const rounds = generateFixtures(currentTeamIds);
+        const stmt = this.env.DB.prepare(
+          "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')"
+        );
+        const batch = rounds.flatMap(r =>
+          r.matches.map(m =>
+            stmt.bind(competitionId, stage.id, null, m.home, m.away, `Week ${r.week}`)
+          )
+        );
+        if (batch.length) await this.env.DB.batch(batch);
+        totalFixtures += batch.length;
+
+        for (const tid of currentTeamIds) {
+          await this.env.DB.prepare(
+            "INSERT OR IGNORE INTO competition_standings (competition_id, stage_id, group_id, team_id) VALUES (?, ?, NULL, ?)"
+          ).bind(competitionId, stage.id, tid).run();
+        }
+      } else if (stage.format === 'knockout') {
+        const bracket = generateKnockoutBracket(currentTeamIds);
+        const stmt = this.env.DB.prepare(
+          "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, bracket_position, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')"
+        );
+        for (const round of bracket) {
+          const batch = round.matches.map(m =>
+            stmt.bind(competitionId, stage.id, null, m.home_team_id, m.away_team_id, round.round_name, m.bracket_position)
+          );
+          if (batch.length) await this.env.DB.batch(batch);
+          totalFixtures += batch.length;
+        }
+      } else if (stage.format === 'two_legged_knockout') {
+        const bracket = generateTwoLeggedKnockoutBracket(currentTeamIds);
+        const stmt = this.env.DB.prepare(
+          "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, leg, bracket_position, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')"
+        );
+        for (const round of bracket) {
+          const batch = round.matches.map(m =>
+            stmt.bind(competitionId, stage.id, null, m.home_team_id, m.away_team_id, round.round_name, m.leg || 1, m.bracket_position)
+          );
+          if (batch.length) await this.env.DB.batch(batch);
+          totalFixtures += batch.length;
+        }
+      } else if (stage.format === 'group_knockout') {
+        const numGroups = stage.num_groups || 4;
+        const teamsPerGroup = Math.ceil(currentTeamIds.length / numGroups);
+        const draw = generateGroupDraw(currentTeamIds, numGroups);
+
+        const groups: Array<{ id: number; name: string; team_ids: number[] }> = [];
+
+        const existingGroups = await this.env.DB.prepare(
+          "DELETE FROM competition_groups WHERE stage_id = ?"
+        ).bind(stage.id).run();
+
+        const groupLetters = 'ABCDEFGHIJKLMNOP';
+        const groupStmt = this.env.DB.prepare(
+          "INSERT INTO competition_groups (stage_id, name) VALUES (?, ?)"
+        );
+        const groupBatch = draw.groups.map(g =>
+          groupStmt.bind(stage.id, g.name)
+        );
+        await this.env.DB.batch(groupBatch);
+
+        const dbGroups = await this.env.DB.prepare(
+          "SELECT id, name FROM competition_groups WHERE stage_id = ? ORDER BY id"
+        ).bind(stage.id).all<{ id: number; name: string }>();
+
+        for (let gi = 0; gi < dbGroups.results.length; gi++) {
+          const dbGroup = dbGroups.results[gi];
+          const drawGroup = draw.groups[gi];
+          if (!drawGroup) continue;
+
+          groups.push({ id: dbGroup.id, name: dbGroup.name, team_ids: drawGroup.team_ids });
+
+          const gtStmt = this.env.DB.prepare(
+            "INSERT OR IGNORE INTO competition_group_teams (group_id, team_id, seed_position) VALUES (?, ?, ?)"
+          );
+          const gtBatch = drawGroup.team_ids.map((tid, idx) =>
+            gtStmt.bind(dbGroup.id, tid, idx + 1)
+          );
+          if (gtBatch.length) await this.env.DB.batch(gtBatch);
+
+          const groupRounds = generateFixtures(drawGroup.team_ids);
+          const fixStmt = this.env.DB.prepare(
+            "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')"
+          );
+          const fixBatch = groupRounds.flatMap(r =>
+            r.matches.map(m =>
+              fixStmt.bind(competitionId, stage.id, dbGroup.id, m.home, m.away, `${dbGroup.name} - Week ${r.week}`)
+            )
+          );
+          if (fixBatch.length) await this.env.DB.batch(fixBatch);
+          totalFixtures += fixBatch.length;
+
+          for (const tid of drawGroup.team_ids) {
+            await this.env.DB.prepare(
+              "INSERT OR IGNORE INTO competition_standings (competition_id, stage_id, group_id, team_id) VALUES (?, ?, ?, ?)"
+            ).bind(competitionId, stage.id, dbGroup.id, tid).run();
+          }
+        }
+
+        if (!isLastStage && stage.teams_advancing > 0 && stages.results[si + 1]) {
+          break;
+        }
+      }
+
+      await this.env.DB.prepare(
+        "UPDATE competition_stages SET status = 'active' WHERE id = ?"
+      ).bind(stage.id).run();
+    }
+
+    await this.env.DB.prepare(
+      "UPDATE competitions SET status = 'active' WHERE id = ?"
+    ).bind(competitionId).run();
+
+    return { success: true, fixturesCount: totalFixtures };
+  }
+
+  async getCompetitionFixtures(competitionId: number, stageId?: number): Promise<Array<Record<string, unknown>>> {
+    let sql = `SELECT cf.*, ht.name as home_team_name, at.name as away_team_name,
+               cg.name as group_name
+               FROM competition_fixtures cf
+               JOIN teams ht ON cf.home_team_id = ht.id
+               JOIN teams at ON cf.away_team_id = at.id
+               LEFT JOIN competition_groups cg ON cf.group_id = cg.id
+               WHERE cf.competition_id = ?`;
+    const bindings: (string | number)[] = [competitionId];
+    if (stageId) {
+      sql += " AND cf.stage_id = ?";
+      bindings.push(stageId);
+    }
+    sql += " ORDER BY cf.stage_id, cf.round_name, cf.leg, cf.id";
+
+    const result = await this.env.DB.prepare(sql).bind(...bindings).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async getCompetitionStandings(competitionId: number, stageId?: number): Promise<Array<Record<string, unknown>>> {
+    let sql = `SELECT cs.*, t.name as team_name, t.abbreviation, cg.name as group_name
+               FROM competition_standings cs
+               JOIN teams t ON cs.team_id = t.id
+               LEFT JOIN competition_groups cg ON cs.group_id = cg.id
+               WHERE cs.competition_id = ?`;
+    const bindings: (string | number)[] = [competitionId];
+    if (stageId) {
+      sql += " AND cs.stage_id = ?";
+      bindings.push(stageId);
+    }
+    sql += " ORDER BY cs.group_id, cs.points DESC, cs.goal_difference DESC, cs.goals_for DESC";
+
+    const result = await this.env.DB.prepare(sql).bind(...bindings).all();
+    return result.results as Array<Record<string, unknown>>;
+  }
+
+  async advanceCompetitionWeek(
+    competitionId: number,
+    leagueId: string
+  ): Promise<{ success: boolean; results?: Array<Record<string, unknown>>; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const config = await this.loadConfig(leagueId);
+
+    const unplayedFixtures = await this.env.DB.prepare(
+      `SELECT cf.*, ht.name as home_team_name, at.name as away_team_name
+       FROM competition_fixtures cf
+       JOIN teams ht ON cf.home_team_id = ht.id
+       JOIN teams at ON cf.away_team_id = at.id
+       WHERE cf.competition_id = ? AND cf.status = 'scheduled' AND cf.match_id IS NULL
+       ORDER BY cf.stage_id, cf.round_name, cf.leg, cf.id
+       LIMIT 20`
+    ).bind(competitionId).all<{
+      id: number; stage_id: number; group_id: number | null;
+      home_team_id: number; away_team_id: number; round_name: string;
+      leg: number; bracket_position: number | null;
+      home_team_name: string; away_team_name: string;
+    }>();
+
+    if (!unplayedFixtures.results?.length) {
+      return { success: false, error: "No unplayed fixtures" };
+    }
+
+    const firstStage = unplayedFixtures.results[0].stage_id;
+    const firstRound = unplayedFixtures.results[0].round_name;
+    const firstLeg = unplayedFixtures.results[0].leg;
+    const weekFixtures = unplayedFixtures.results.filter(
+      f => f.stage_id === firstStage && f.round_name === firstRound && f.leg === firstLeg
+    );
+
+    const matchResults: Array<Record<string, unknown>> = [];
+
+    for (const fixture of weekFixtures) {
+      const homePlayers = await this.env.DB.prepare(
+        "SELECT * FROM players WHERE team_id = ?"
+      ).bind(fixture.home_team_id).all();
+      const awayPlayers = await this.env.DB.prepare(
+        "SELECT * FROM players WHERE team_id = ?"
+      ).bind(fixture.away_team_id).all();
+      const homeRoster = homePlayers.results as unknown as Player[];
+      const awayRoster = awayPlayers.results as unknown as Player[];
+      if (!homeRoster.length || !awayRoster.length) continue;
+
+      const homeSheet = createTeamsheet(homeRoster, "442N", "", 5);
+      const awaySheet = createTeamsheet(awayRoster, "442N", "", 5);
+      const homeLineup = teamsheetToLineup(homeSheet);
+      const awayLineup = teamsheetToLineup(awaySheet);
+
+      const matchResult = simulateMatch(
+        homeRoster, awayRoster,
+        homeLineup.lineup, awayLineup.lineup,
+        homeSheet.tactic, awaySheet.tactic,
+        fixture.home_team_name, fixture.away_team_name,
+        [], [], homeLineup.penalty_taker, awayLineup.penalty_taker,
+        config
+      );
+
+      const matchInsert = await this.env.DB.prepare(
+        `INSERT INTO matches (home_team_id, away_team_id, home_tactic, away_tactic,
+          home_lineup, away_lineup, home_conditionals, away_conditionals,
+          status, home_score, away_score, commentary, match_events, played_at, league_id)
+         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        fixture.home_team_id, fixture.away_team_id,
+        homeSheet.tactic, awaySheet.tactic,
+        JSON.stringify(homeLineup.lineup), JSON.stringify(awayLineup.lineup),
+        matchResult.home_score, matchResult.away_score,
+        matchResult.commentary, JSON.stringify(matchResult.events),
+        new Date().toISOString(), leagueId
+      ).run();
+
+      const matchId = matchInsert.meta.last_row_id;
+      await this.env.DB.prepare(
+        "UPDATE competition_fixtures SET match_id = ?, status = 'played' WHERE id = ?"
+      ).bind(matchId, fixture.id).run();
+
+      for (const stat of matchResult.home_stats) {
+        const player = homeRoster.find(p => p.id === stat.player_id);
+        if (player) await this.applyStats(player, stat, config);
+      }
+      for (const stat of matchResult.away_stats) {
+        const player = awayRoster.find(p => p.id === stat.player_id);
+        if (player) await this.applyStats(player, stat, config);
+      }
+
+      await this.updateCompetitionStandings(
+        competitionId, fixture.stage_id, fixture.group_id,
+        fixture.home_team_id, fixture.away_team_id,
+        matchResult.home_score, matchResult.away_score
+      );
+
+      matchResults.push({
+        home: fixture.home_team_name,
+        away: fixture.away_team_name,
+        home_score: matchResult.home_score,
+        away_score: matchResult.away_score,
+      });
+    }
+
+    const remainingInStage = await this.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM competition_fixtures WHERE stage_id = ? AND status = 'scheduled'"
+    ).bind(firstStage).first<{ count: number }>();
+
+    if (!remainingInStage || remainingInStage.count === 0) {
+      await this.env.DB.prepare(
+        "UPDATE competition_stages SET status = 'completed' WHERE id = ?"
+      ).bind(firstStage).run();
+
+      await this.tryGenerateNextStage(competitionId, leagueId);
+    }
+
+    return { success: true, results: matchResults };
+  }
+
+  private async tryGenerateNextStage(competitionId: number, leagueId: string): Promise<void> {
+    const stages = await this.env.DB.prepare(
+      "SELECT * FROM competition_stages WHERE competition_id = ? ORDER BY stage_order"
+    ).bind(competitionId).all<{
+      id: number; name: string; stage_order: number; format: string;
+      num_groups: number; teams_advancing: number; num_legs: number; status: string;
+    }>();
+
+    const completedIdx = stages.results.findIndex(s => s.status === 'completed');
+    if (completedIdx < 0) return;
+
+    const completedStage = stages.results[completedIdx];
+    const nextStage = stages.results[completedIdx + 1];
+    if (!nextStage) {
+      const allCompleted = stages.results.every(s => s.status === 'completed');
+      if (allCompleted) {
+        await this.env.DB.prepare(
+          "UPDATE competitions SET status = 'completed' WHERE id = ?"
+        ).bind(competitionId).run();
+      }
+      return;
+    }
+
+    let advancingTeams: Array<{ team_id: number }>;
+
+    if (completedStage.format === 'round_robin' || completedStage.format === 'group_knockout') {
+      const standings = await this.env.DB.prepare(
+        `SELECT cs.group_id, cs.team_id, cs.points, cs.goal_difference, cs.goals_for
+         FROM competition_standings cs
+         WHERE cs.competition_id = ? AND cs.stage_id = ?
+         ORDER BY cs.points DESC, cs.goal_difference DESC, cs.goals_for DESC`
+      ).bind(competitionId, completedStage.id).all<{
+        group_id: number | null; team_id: number;
+        points: number; goal_difference: number; goals_for: number;
+      }>();
+
+      if (completedStage.num_groups > 0 && completedStage.teams_advancing > 0) {
+        const advancing = getAdvancingFromGroups(
+          standings.results.filter((s): s is { group_id: number; team_id: number; points: number; goal_difference: number; goals_for: number } => s.group_id !== null),
+          completedStage.teams_advancing
+        );
+        const seeded = groupAdvancingToKnockoutSeedOrder(advancing);
+        advancingTeams = seeded;
+      } else {
+        const perGroup = completedStage.teams_advancing || standings.results.length;
+        advancingTeams = standings.results.slice(0, perGroup).map(s => ({ team_id: s.team_id }));
+      }
+    } else {
+      const playedFixtures = await this.env.DB.prepare(
+        `SELECT cf.home_team_id, cf.away_team_id, cf.bracket_position, cf.leg,
+                m.home_score, m.away_score
+         FROM competition_fixtures cf
+         JOIN matches m ON cf.match_id = m.id
+         WHERE cf.stage_id = ? AND cf.status = 'played'
+         ORDER BY cf.bracket_position, cf.leg`
+      ).bind(completedStage.id).all<{
+        home_team_id: number; away_team_id: number;
+        bracket_position: number | null; leg: number;
+        home_score: number; away_score: number;
+      }>();
+
+      const aggregateScores = new Map<number, { team_id: number; goals: number; away_goals: number }[]>();
+
+      for (const pf of playedFixtures.results) {
+        const bp = pf.bracket_position ?? 0;
+        if (!aggregateScores.has(bp)) aggregateScores.set(bp, []);
+
+        const entries = aggregateScores.get(bp)!;
+        const homeEntry = entries.find(e => e.team_id === pf.home_team_id);
+        const awayEntry = entries.find(e => e.team_id === pf.away_team_id);
+
+        if (homeEntry) {
+          homeEntry.goals += pf.home_score;
+          homeEntry.away_goals += pf.away_score;
+        } else {
+          entries.push({ team_id: pf.home_team_id, goals: pf.home_score, away_goals: 0 });
+        }
+        if (awayEntry) {
+          awayEntry.goals += pf.away_score;
+          awayEntry.away_goals += pf.home_score;
+        } else {
+          entries.push({ team_id: pf.away_team_id, goals: pf.away_score, away_goals: pf.home_score });
+        }
+      }
+
+      advancingTeams = [];
+      const sortedBrackets = [...aggregateScores.entries()].sort(([a], [b]) => a - b);
+      for (const [, entries] of sortedBrackets) {
+        if (entries.length === 2) {
+          const [a, b] = entries;
+          if (a.goals > b.goals || (a.goals === b.goals && a.away_goals > b.away_goals)) {
+            advancingTeams.push({ team_id: a.team_id });
+          } else {
+            advancingTeams.push({ team_id: b.team_id });
+          }
+        } else if (entries.length === 1) {
+          advancingTeams.push({ team_id: entries[0].team_id });
+        }
+      }
+    }
+
+    if (advancingTeams.length < 2) {
+      await this.env.DB.prepare(
+        "UPDATE competitions SET status = 'completed' WHERE id = ?"
+      ).bind(competitionId).run();
+      return;
+    }
+
+    if (nextStage.format === 'knockout') {
+      const matches = generateNextKnockoutRound(advancingTeams, nextStage.name);
+      const stmt = this.env.DB.prepare(
+        "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, bracket_position, status) VALUES (?, ?, NULL, ?, ?, ?, ?, 'scheduled')"
+      );
+      const batch = matches.map(m =>
+        stmt.bind(competitionId, nextStage.id, m.home_team_id, m.away_team_id, nextStage.name, m.bracket_position)
+      );
+      if (batch.length) await this.env.DB.batch(batch);
+    } else if (nextStage.format === 'two_legged_knockout') {
+      const matches = generateNextKnockoutRound(advancingTeams, nextStage.name);
+      const batch: D1PreparedStatement[] = [];
+      const stmt = this.env.DB.prepare(
+        "INSERT INTO competition_fixtures (competition_id, stage_id, group_id, home_team_id, away_team_id, round_name, leg, bracket_position, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'scheduled')"
+      );
+      for (const m of matches) {
+        batch.push(stmt.bind(competitionId, nextStage.id, m.home_team_id, m.away_team_id, `${nextStage.name} (1st Leg)`, 1, m.bracket_position));
+        batch.push(stmt.bind(competitionId, nextStage.id, m.away_team_id, m.home_team_id, `${nextStage.name} (2nd Leg)`, 2, m.bracket_position));
+      }
+      if (batch.length) await this.env.DB.batch(batch);
+    }
+
+    await this.env.DB.prepare(
+      "UPDATE competition_stages SET status = 'active' WHERE id = ?"
+    ).bind(nextStage.id).run();
+  }
+
+  private async updateCompetitionStandings(
+    competitionId: number,
+    stageId: number,
+    groupId: number | null,
+    homeId: number,
+    awayId: number,
+    homeGoals: number,
+    awayGoals: number
+  ): Promise<void> {
+    await this.env.DB.prepare(
+      "INSERT OR IGNORE INTO competition_standings (competition_id, stage_id, group_id, team_id) VALUES (?, ?, ?, ?)"
+    ).bind(competitionId, stageId, groupId, homeId).run();
+    await this.env.DB.prepare(
+      "INSERT OR IGNORE INTO competition_standings (competition_id, stage_id, group_id, team_id) VALUES (?, ?, ?, ?)"
+    ).bind(competitionId, stageId, groupId, awayId).run();
+
+    if (homeGoals > awayGoals) {
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, won = won + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 3 WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(homeGoals, awayGoals, homeGoals - awayGoals, competitionId, stageId, groupId, homeId).run();
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, lost = lost + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ? WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(awayGoals, homeGoals, awayGoals - homeGoals, competitionId, stageId, groupId, awayId).run();
+    } else if (awayGoals > homeGoals) {
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, won = won + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 3 WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(awayGoals, homeGoals, awayGoals - homeGoals, competitionId, stageId, groupId, awayId).run();
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, lost = lost + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ? WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(homeGoals, awayGoals, homeGoals - awayGoals, competitionId, stageId, groupId, homeId).run();
+    } else {
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, drawn = drawn + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 1 WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(homeGoals, awayGoals, 0, competitionId, stageId, groupId, homeId).run();
+      await this.env.DB.prepare(
+        "UPDATE competition_standings SET played = played + 1, drawn = drawn + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 1 WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
+      ).bind(awayGoals, homeGoals, 0, competitionId, stageId, groupId, awayId).run();
+    }
   }
 
   private async loadConfig(leagueId: string): Promise<LeagueConfig> {

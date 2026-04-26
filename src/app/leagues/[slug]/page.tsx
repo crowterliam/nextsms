@@ -9,6 +9,13 @@ interface TeamWithoutManager {
   name: string;
 }
 
+interface Season {
+  id: number;
+  season_number: number;
+  name: string;
+  status: string;
+}
+
 interface LeagueDetail {
   id: string;
   name: string;
@@ -20,6 +27,9 @@ interface LeagueDetail {
   teamCount: number;
   userRole: string;
   teamsWithoutManagers: TeamWithoutManager[];
+  seasons: Season[];
+  currentSeason: Season | null;
+  seasonId: number | null;
 }
 
 export default function LeagueDetailPage() {
@@ -28,6 +38,7 @@ export default function LeagueDetailPage() {
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [error, setError] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [creatingSeason, setCreatingSeason] = useState(false);
 
   useEffect(() => {
     fetchLeague();
@@ -60,6 +71,22 @@ export default function LeagueDetailPage() {
     setGenerating(false);
   };
 
+  const handleCreateSeason = async () => {
+    setCreatingSeason(true);
+    try {
+      const res = await fetch(`/api/leagues/${slug}/seasons`, { method: 'POST' });
+      if (res.ok) {
+        fetchLeague();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create season');
+      }
+    } catch {
+      alert('Failed to create season');
+    }
+    setCreatingSeason(false);
+  };
+
   if (error) {
     return (
       <div className="text-center mt-20">
@@ -74,8 +101,16 @@ export default function LeagueDetailPage() {
   }
 
   const isAdmin = league.userRole === 'owner' || league.userRole === 'admin';
+  const hasSeason = league.seasonId !== null;
+  const seasonName = league.currentSeason?.name || `Season ${league.season}`;
 
   const setupChecklist = [
+    {
+      label: 'Create a season',
+      done: hasSeason,
+      detail: hasSeason ? `${seasonName} is active` : 'No season created yet',
+      action: hasSeason ? null : 'create_season' as const,
+    },
     {
       label: 'Add at least 2 teams',
       done: league.teamCount >= 2,
@@ -95,7 +130,7 @@ export default function LeagueDetailPage() {
     {
       label: 'Generate fixtures to start the season',
       done: league.status !== 'setup',
-      detail: league.status === 'setup' ? 'League is in setup mode' : `Season ${league.season} is active`,
+      detail: league.status === 'setup' ? 'League is in setup mode' : `${seasonName} is active`,
       href: `/leagues/${slug}/fixtures`,
       action: 'Generate Fixtures',
     },
@@ -115,7 +150,7 @@ export default function LeagueDetailPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">{league.name}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>Season {league.season}</span>
+            {hasSeason && <span>{seasonName}</span>}
             <span className="capitalize px-2 py-1 rounded-full bg-muted text-xs">{league.status}</span>
             {league.current_week > 0 && <span>Week {league.current_week}</span>}
             <span>{league.teamCount} teams</span>
@@ -123,7 +158,27 @@ export default function LeagueDetailPage() {
         </div>
       </div>
 
-      {isAdmin && league.status === 'setup' && (
+      {!hasSeason && (
+        <div className="mb-6 border border-primary/30 rounded-lg bg-primary/5 p-6 text-center">
+          <h2 className="text-lg font-semibold mb-2">Create Your First Season</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Before you can add teams, generate fixtures, or play matches, you need to create a season.
+          </p>
+          {isAdmin ? (
+            <button
+              onClick={handleCreateSeason}
+              disabled={creatingSeason}
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-dark transition-colors disabled:opacity-50"
+            >
+              {creatingSeason ? 'Creating...' : 'Create Season 1'}
+            </button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Ask a league admin to create a season.</p>
+          )}
+        </div>
+      )}
+
+      {isAdmin && hasSeason && league.status === 'setup' && (
         <div className="mb-6 border border-primary/30 rounded-lg bg-primary/5 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">League Setup Checklist</h2>
@@ -157,14 +212,14 @@ export default function LeagueDetailPage() {
                       {generating ? 'Generating...' : 'Quick Generate 6'}
                     </button>
                     <Link
-                      href={item.href}
+                      href={item.href!}
                       className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary-dark transition-colors"
                     >
                       Add Manually
                     </Link>
                   </div>
                 )}
-                {!item.done && item.action !== 'Add Teams' && (
+                {!item.done && item.href && item.action !== 'Add Teams' && (
                   <Link
                     href={item.href}
                     className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary-dark transition-colors"
@@ -208,40 +263,64 @@ export default function LeagueDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Link
-          href={`/leagues/${slug}/teams`}
-          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+          href={hasSeason ? `/leagues/${slug}/teams` : '#'}
+          className={`group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all ${!hasSeason ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Teams</h2>
           <p className="text-sm text-muted-foreground">{league.teamCount} teams in this league</p>
         </Link>
 
         <Link
-          href={`/leagues/${slug}/table`}
-          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+          href={hasSeason ? `/leagues/${slug}/table` : '#'}
+          className={`group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all ${!hasSeason ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">League Table</h2>
           <p className="text-sm text-muted-foreground">Current standings</p>
         </Link>
 
         <Link
-          href={`/leagues/${slug}/fixtures`}
-          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+          href={hasSeason ? `/leagues/${slug}/fixtures` : '#'}
+          className={`group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all ${!hasSeason ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Fixtures</h2>
           <p className="text-sm text-muted-foreground">Season schedule & results</p>
         </Link>
 
         <Link
-          href={`/leagues/${slug}/matches`}
-          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+          href={hasSeason ? `/leagues/${slug}/matches` : '#'}
+          className={`group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all ${!hasSeason ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Match History</h2>
           <p className="text-sm text-muted-foreground">All played matches</p>
         </Link>
 
         <Link
-          href={`/leagues/${slug}/simulate`}
+          href={`/leagues/${slug}/seasons`}
           className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+        >
+          <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Seasons</h2>
+          <p className="text-sm text-muted-foreground">Manage seasons & progression</p>
+        </Link>
+
+        <Link
+          href={`/leagues/${slug}/competitions`}
+          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+        >
+          <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Competitions</h2>
+          <p className="text-sm text-muted-foreground">Cups, playoffs & tournaments</p>
+        </Link>
+
+        <Link
+          href={`/leagues/${slug}/divisions`}
+          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+        >
+          <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Divisions</h2>
+          <p className="text-sm text-muted-foreground">Multi-tier league structure</p>
+        </Link>
+
+        <Link
+          href={hasSeason ? `/leagues/${slug}/simulate` : '#'}
+          className={`group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all ${!hasSeason ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Simulate</h2>
           <p className="text-sm text-muted-foreground">Quick match simulation</p>
@@ -253,6 +332,14 @@ export default function LeagueDetailPage() {
         >
           <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Transfer Market</h2>
           <p className="text-sm text-muted-foreground">Buy, sell, and loan players</p>
+        </Link>
+
+        <Link
+          href={`/leagues/${slug}/history`}
+          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+        >
+          <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">History</h2>
+          <p className="text-sm text-muted-foreground">Past season records</p>
         </Link>
 
         <Link

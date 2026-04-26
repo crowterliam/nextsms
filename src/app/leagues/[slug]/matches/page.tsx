@@ -1,31 +1,66 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LeagueMatchesPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
   const [matches, setMatches] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
+  const [seasonName, setSeasonName] = useState('');
+  const [hasSeason, setHasSeason] = useState(true);
 
   useEffect(() => {
     fetchMatches();
   }, [slug]);
 
   const fetchMatches = async () => {
-    try {
-      const res = await fetch(`/api/leagues/${slug}/matches`);
-      if (res.ok) setMatches(await res.json());
-    } catch {}
+    const [leagueRes, matchesRes] = await Promise.all([
+      fetch(`/api/leagues/${slug}`).catch(() => null),
+      fetch(`/api/leagues/${slug}/matches`).catch(() => null),
+    ]);
+
+    if (leagueRes?.ok) {
+      const league = await leagueRes.json();
+      setSeasonName(league.currentSeason?.name || `Season ${league.season}`);
+      setHasSeason(league.seasonId !== null);
+    }
+
+    if (matchesRes?.ok) setMatches(await matchesRes.json());
     setLoading(false);
   };
+
+  if (!hasSeason && !loading) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+          <span>/</span>
+          <span>Matches</span>
+        </div>
+        <h1 className="text-2xl font-bold mb-6">Match History</h1>
+        <div className="text-center py-12 border border-border rounded-lg bg-card">
+          <p className="text-muted-foreground mb-4">No season has been created yet.</p>
+          <button
+            onClick={() => router.push(`/leagues/${slug}`)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+          >
+            Go to League Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
         <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+        <span>/</span>
+        <span>{seasonName}</span>
         <span>/</span>
         <span>Matches</span>
       </div>

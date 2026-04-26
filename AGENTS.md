@@ -70,7 +70,13 @@ src/
     fixtures.ts                   # Round-robin fixture generation (home & away)
     roster-creator.ts             # Random player/roster generation
     teamsheet-creator.ts          # Formation parsing, position selection, lineup output
-    updater.ts                    # Post-match: ability changes, fitness, injury/suspension
+    updater.ts                   # Post-match: ability changes, fitness, injury/suspension
+    league-do.ts                 # LeagueDO Durable Object (season, competition, division management)
+    competition-engine.ts        # Knockout brackets, group draws, stage advancement logic
+    auth.ts                      # better-auth server config
+    auth-client.ts               # better-auth React client
+    auth-helpers.ts              # getSession, requireAuth, requireLeagueMember/Admin/TeamManager, getLeagueDO
+    legacy-parser.ts             # Legacy ESMS file parsers (roster, config, fixtures, table)
 worker/
   index.ts                        # Worker entry — stores env on globalThis, image optimization
 migrations/
@@ -99,6 +105,23 @@ public/                           # Static assets (SVGs, _headers)
 | `fixtures` | id, season, week, home/away team FKs, match_id (FK) — UNIQUE(season, week, home, away) |
 | `league_table` | id, team_id (FK), season, played/won/drawn/lost, goals_for/against/difference, points |
 | `league_config` | key (PK), value — stores simulation parameters |
+
+Additional tables added by migrations 0002–0006:
+
+| Table | Key Columns |
+|-------|------------|
+| `leagues` | id, name, slug (UNIQUE), owner_id, season, current_week, status |
+| `league_members` | league_id, user_id, role |
+| `seasons` | id, league_id, season_number, name, status (setup/active/completed/archived) |
+| `divisions` | id, league_id, season_id, name, level, promotion/relegation/playoff spots |
+| `division_teams` | division_id, team_id, season_id |
+| `competitions` | id, league_id, season_id, division_id, name, type, format, status |
+| `competition_stages` | id, competition_id, name, stage_order, format, num_groups, teams_advancing, num_legs |
+| `competition_groups` | id, stage_id, name |
+| `competition_group_teams` | group_id, team_id, seed_position |
+| `competition_fixtures` | id, competition_id, stage_id, group_id, home/away team, match_id, round_name, leg, bracket_position |
+| `competition_standings` | id, competition_id, stage_id, group_id, team_id, played/won/drawn/lost, goals/points |
+| `season_history` | id, league_id, season_id, category, data (JSON) |
 
 ## Code Conventions
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 interface Team {
@@ -13,6 +13,7 @@ interface Team {
 export default function LeagueTeamsPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -21,18 +22,50 @@ export default function LeagueTeamsPage() {
   const [adding, setAdding] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [genCount, setGenCount] = useState(6);
+  const [seasonName, setSeasonName] = useState('');
+  const [hasSeason, setHasSeason] = useState(true);
 
   useEffect(() => {
     fetchTeams();
   }, [slug]);
 
   const fetchTeams = async () => {
-    try {
-      const res = await fetch(`/api/leagues/${slug}/teams`);
-      if (res.ok) setTeams(await res.json());
-    } catch {}
+    const [leagueRes, teamsRes] = await Promise.all([
+      fetch(`/api/leagues/${slug}`).catch(() => null),
+      fetch(`/api/leagues/${slug}/teams`).catch(() => null),
+    ]);
+
+    if (leagueRes?.ok) {
+      const league = await leagueRes.json();
+      setSeasonName(league.currentSeason?.name || `Season ${league.season}`);
+      setHasSeason(league.seasonId !== null);
+    }
+
+    if (teamsRes?.ok) setTeams(await teamsRes.json());
     setLoading(false);
   };
+
+  if (!hasSeason && !loading) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+          <span>/</span>
+          <span>Teams</span>
+        </div>
+        <h1 className="text-2xl font-bold mb-6">Teams</h1>
+        <div className="text-center py-12 border border-border rounded-lg bg-card">
+          <p className="text-muted-foreground mb-4">No season has been created yet.</p>
+          <button
+            onClick={() => router.push(`/leagues/${slug}`)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+          >
+            Go to League Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +100,6 @@ export default function LeagueTeamsPage() {
         body: JSON.stringify({ action: 'generate_placeholder', count: genCount }),
       });
       if (res.ok) {
-        const data = await res.json();
         fetchTeams();
       } else {
         const data = await res.json();
@@ -95,6 +127,8 @@ export default function LeagueTeamsPage() {
     <div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
         <Link href={`/leagues/${slug}`} className="hover:text-foreground">{slug}</Link>
+        <span>/</span>
+        <span>{seasonName}</span>
         <span>/</span>
         <span>Teams</span>
       </div>

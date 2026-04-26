@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Season-first flow: league dashboard now requires creating a season before teams, fixtures, matches, or table can be accessed
+- Season context shown in breadcrumbs on fixtures, matches, teams, and table pages
+- Season creation call-to-action on league dashboard when no season exists
+- Season-aware setup checklist with "Create a season" as the first step
+- Season validation on advance-week and generate-fixtures API endpoints
+
+- Season management: create, advance, and complete seasons with full history archival
+- Multi-stage competition engine: knockout brackets, group stages, two-legged ties, round-robin pools
+- Cup and tournament management: create competitions with multiple stages (e.g. Group Stage → Knockout)
+- Group stage automatic draw with seeded team distribution
+- Knockout bracket generation with proper seeding (1v8, 2v7, etc.)
+- Two-legged knockout ties with aggregate score and away-goals progression
+- Multi-division support: create divisions with promotion/relegation/playoff spots
+- Auto-assign teams to divisions based on league standings
+- Competition fixture generation with per-stage scheduling
+- Competition standings tracking with group-level tables
+- Week-by-week competition simulation with automatic stage advancement
+- Season history archival: standings, competition results, and division data saved on season completion
+- Season history page with filterable views by season and category
+- API routes for seasons (`/api/leagues/[slug]/seasons`), competitions (`/api/leagues/[slug]/competitions`), divisions (`/api/leagues/[slug]/seasons/[id]/divisions`), and history (`/api/leagues/[slug]/history`)
+- Database migration 0006: seasons, divisions, division_teams, competitions, competition_stages, competition_groups, competition_group_teams, competition_fixtures, competition_standings, season_history tables
+- Competition detail page with fixtures, standings, and bracket views
+- League dashboard updated with navigation cards for Seasons, Competitions, Divisions, and History
 - Admin management API at `/api/leagues/[slug]/admin` with actions: reset_fixture, reset_week, reset_all, delete_matches, edit_score, resimulate
 - Match report page at `/leagues/[slug]/matches/[id]` showing scoreline, events, lineups, and full commentary
 - Match detail API at `/api/leagues/[slug]/matches/[id]` with team names, and DELETE for admins

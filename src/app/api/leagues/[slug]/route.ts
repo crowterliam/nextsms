@@ -38,6 +38,8 @@ export async function GET(
   const doStub = getLeagueDO(slug);
   const state = await doStub.getState();
   const teams = await doStub.getTeams(league.id);
+  const seasons = await doStub.getSeasons(league.id);
+  const currentSeason = await doStub.getCurrentSeason(league.id);
 
   const teamsWithoutManagers = await env.DB.prepare(
     "SELECT id, name FROM teams WHERE league_id = ? AND manager_user_id IS NULL"
@@ -54,5 +56,8 @@ export async function GET(
     teamCount: teams.length,
     userRole: role,
     teamsWithoutManagers: teamsWithoutManagers.results,
+    seasons,
+    currentSeason,
+    seasonId: state?.seasonId ?? (currentSeason as Record<string, unknown> | null)?.id ?? null,
   });
 }
