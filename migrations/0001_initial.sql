@@ -1,0 +1,91 @@
+CREATE TABLE IF NOT EXISTS teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  abbreviation TEXT NOT NULL UNIQUE,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS players (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id INTEGER NOT NULL REFERENCES teams(id),
+  name TEXT NOT NULL,
+  age INTEGER NOT NULL DEFAULT 20,
+  nationality TEXT NOT NULL DEFAULT '',
+  pref_side TEXT NOT NULL DEFAULT 'C',
+  st INTEGER NOT NULL DEFAULT 0,
+  tk INTEGER NOT NULL DEFAULT 0,
+  ps INTEGER NOT NULL DEFAULT 0,
+  sh INTEGER NOT NULL DEFAULT 0,
+  sm INTEGER NOT NULL DEFAULT 50,
+  ag INTEGER NOT NULL DEFAULT 30,
+  st_ab INTEGER NOT NULL DEFAULT 300,
+  tk_ab INTEGER NOT NULL DEFAULT 300,
+  ps_ab INTEGER NOT NULL DEFAULT 300,
+  sh_ab INTEGER NOT NULL DEFAULT 300,
+  games INTEGER NOT NULL DEFAULT 0,
+  saves INTEGER NOT NULL DEFAULT 0,
+  tackles INTEGER NOT NULL DEFAULT 0,
+  keypasses INTEGER NOT NULL DEFAULT 0,
+  shots INTEGER NOT NULL DEFAULT 0,
+  goals INTEGER NOT NULL DEFAULT 0,
+  assists INTEGER NOT NULL DEFAULT 0,
+  dp INTEGER NOT NULL DEFAULT 0,
+  injury INTEGER NOT NULL DEFAULT 0,
+  suspension INTEGER NOT NULL DEFAULT 0,
+  fitness INTEGER NOT NULL DEFAULT 100,
+  UNIQUE(team_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  home_team_id INTEGER NOT NULL REFERENCES teams(id),
+  away_team_id INTEGER NOT NULL REFERENCES teams(id),
+  home_score INTEGER DEFAULT 0,
+  away_score INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  home_tactic TEXT DEFAULT 'N',
+  away_tactic TEXT DEFAULT 'N',
+  commentary TEXT DEFAULT '',
+  match_events TEXT DEFAULT '[]',
+  home_lineup TEXT DEFAULT '[]',
+  away_lineup TEXT DEFAULT '[]',
+  home_conditionals TEXT DEFAULT '[]',
+  away_conditionals TEXT DEFAULT '[]',
+  played_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS fixtures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season INTEGER NOT NULL DEFAULT 1,
+  week INTEGER NOT NULL,
+  home_team_id INTEGER NOT NULL REFERENCES teams(id),
+  away_team_id INTEGER NOT NULL REFERENCES teams(id),
+  match_id INTEGER REFERENCES matches(id),
+  UNIQUE(season, week, home_team_id, away_team_id)
+);
+
+CREATE TABLE IF NOT EXISTS league_table (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id INTEGER NOT NULL UNIQUE REFERENCES teams(id),
+  season INTEGER NOT NULL DEFAULT 1,
+  played INTEGER NOT NULL DEFAULT 0,
+  won INTEGER NOT NULL DEFAULT 0,
+  drawn INTEGER NOT NULL DEFAULT 0,
+  lost INTEGER NOT NULL DEFAULT 0,
+  goals_for INTEGER NOT NULL DEFAULT 0,
+  goals_against INTEGER NOT NULL DEFAULT 0,
+  goal_difference INTEGER NOT NULL DEFAULT 0,
+  points INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS league_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
+CREATE INDEX IF NOT EXISTS idx_matches_home ON matches(home_team_id);
+CREATE INDEX IF NOT EXISTS idx_matches_away ON matches(away_team_id);
+CREATE INDEX IF NOT EXISTS idx_fixtures_season_week ON fixtures(season, week);
+CREATE INDEX IF NOT EXISTS idx_league_table_season ON league_table(season);

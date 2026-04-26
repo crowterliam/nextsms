@@ -1,0 +1,56 @@
+NextSMS — Next Soccer Management Simulator
+Copyright (C) 2026 NextSMS contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+================================================================================
+THIRD-PARTY NOTICES
+================================================================================
+
+1. ESMS — Electronic Soccer Management Simulator
+   ------------------------------------------------
+   Copyright (C) 1998-2005 Eli Bendersky (eliben@gmail.com)
+   https://github.com/eliben/esms
+
+   NextSMS is a modern web port of ESMS. The following source files contain
+   algorithms, data structures, and logic derived from the original ESMS
+   codebase, originally licensed under the GNU Lesser General Public License
+   v3.0 (LGPL-3.0):
+
+     src/lib/simulator.ts          — from src/esms.cpp, src/penalty.cpp
+     src/lib/commentary.ts         — from src/comment.cpp, src/comment.h
+     src/lib/conditionals.ts       — from src/cond.cpp, src/cond_action.cpp,
+                                      src/cond_condition.cpp, src/cond_utils.cpp
+     src/lib/config.ts             — from src/config.cpp, src/league_table.cpp
+     src/lib/fixtures.ts           — from src/fixtures.cpp
+     src/lib/roster-creator.ts     — from src/roster_creator.cpp,
+                                      src/rosterplayer.cpp
+     src/lib/tactics.ts            — from src/tactics.cpp, src/tactics.h
+     src/lib/teamsheet-creator.ts  — from src/tsc.cpp, src/teamsheet_reader.cpp
+     src/lib/updater.ts            — from src/updtr.cpp, src/updtr.h
+     src/lib/types.ts              — from src/game.h, src/rosterplayer.h
+
+   LGPL-3.0 Section 3 permits relicensing under the GPL-3.0 (and by extension
+   AGPL-3.0). All derived code in NextSMS is distributed under
+   AGPL-3.0-or-later.
+
+2. Mersenne Twister MT19937
+   -------------------------
+   Copyright (C) 1997 Makoto Matsumoto and Takuji Nishimura
+
+   src/lib/random.ts contains a TypeScript port of the Mersenne Twister
+   MT19937 pseudorandom number generator, originally adapted for ESMS by
+   Eli Bendersky (from src/mt.cpp, src/mt.h) and subsequently ported to
+   TypeScript for NextSMS.
+
+   The original MT19937 code was licensed under the GNU Library General
+   Public License v2 (LGPL-2.0). This file is distributed under
+   AGPL-3.0-or-later.
+
+   Reference: Matsumoto, M. and Nishimura, T., "Mersenne Twister:
+   A 623-Dimensionally Equidistributed Uniform Pseudorandom Number
+   Generator", ACM Transactions on Modeling and Computer Simulation,
+   Vol. 8, No. 1, January 1998, pp. 3-30.

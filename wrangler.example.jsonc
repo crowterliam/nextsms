@@ -1,0 +1,48 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "nextsms",
+	"main": "./worker/index.ts",
+	"compatibility_date": "2026-04-25",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".open-next/assets"
+	},
+	"images": {
+		"binding": "IMAGES"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nextsms-db",
+			"database_id": "<YOUR_D1_DATABASE_ID>",
+			"migrations_dir": "migrations"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "LEAGUE_DO",
+				"class_name": "LeagueDO",
+				"script_name": "nextsms"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["LeagueDO"]
+		}
+	],
+	"vars": {
+		"BETTER_AUTH_URL": INSERT_YOUR_URL_HERE,
+		"BETTER_AUTH_SECRET": INSERT_YOUR_SECRET_HERE
+	}
+}
