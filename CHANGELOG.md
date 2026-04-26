@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Conditionals tab on team detail page: create, view, and remove tactical instructions (TACTIC, CHANGEPOS, SUB) with conditions (MIN, SCORE, YELLOW, RED, INJ) for saved lineups
+- Structured conditional builder form with position/tactic dropdowns, condition editor, and live preview
+- `update_conditionals` action on lineups API for saving conditional instructions to existing saved lineups
+
+- Match reports now show full live commentary from the simulation engine instead of synthetic event labels
+- Player-by-player match statistics table: goals, assists, shots, tackles, key passes, saves, fouls, cards, minutes played, and rating
+- Team statistics comparison bar: possession, shots, shots on target, tackles, fouls, and goals
+- Per-match player stats and possession data stored in database for all new matches
+- Database migration 0007: added `home_stats`, `away_stats`, `home_possession`, `away_possession` columns to matches table
+
 - Season-first flow: league dashboard now requires creating a season before teams, fixtures, matches, or table can be accessed
 - Season context shown in breadcrumbs on fixtures, matches, teams, and table pages
 - Season creation call-to-action on league dashboard when no season exists

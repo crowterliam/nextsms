@@ -7,8 +7,10 @@ import {
   MatchScoreHeader,
   MatchEventsList,
   LineupTable,
+  StatsTable,
+  TeamStatsBar,
 } from '@/components/match-report';
-import type { MatchEventDisplay, LineupPlayer } from '@/components/match-report';
+import type { MatchEventDisplay, LineupPlayer, PlayerStats } from '@/components/match-report';
 
 function safeParseJson<T>(value: unknown, fallback: T): T {
   try {
@@ -83,8 +85,8 @@ export default function MatchReportPage() {
     type: (ev.type as string) ?? '',
     team: (ev.team as 'home' | 'away') ?? 'home',
     player: (ev.player as string) ?? '',
-    secondary_player: ev.secondary as string | undefined,
-    commentary: `${ev.player || ''} — ${(ev.type as string) || ''}${ev.secondary ? ` (for ${ev.secondary})` : ''}`,
+    secondary_player: (ev.secondary_player ?? ev.secondary) as string | undefined,
+    commentary: (ev.commentary as string) || `${ev.player || ''} — ${(ev.type as string) || ''}${ev.secondary_player || ev.secondary ? ` (for ${ev.secondary_player || ev.secondary})` : ''}`,
   }));
 
   const rawHomeLineup: Array<Record<string, unknown>> = safeParseJson(match.home_lineup, []);
@@ -102,6 +104,12 @@ export default function MatchReportPage() {
     is_sub: (p.is_sub as boolean) ?? false,
   }));
 
+  const homePlayerStats: PlayerStats[] = safeParseJson(match.home_stats, []);
+  const awayPlayerStats: PlayerStats[] = safeParseJson(match.away_stats, []);
+
+  const homePossession = (match.home_possession as number) ?? 50;
+  const awayPossession = (match.away_possession as number) ?? 50;
+
   return (
     <div className="space-y-6">
       {breadcrumb}
@@ -117,8 +125,26 @@ export default function MatchReportPage() {
         playedAt={(match.played_at as string) || undefined}
       />
 
+      {(homePlayerStats.length > 0 || awayPlayerStats.length > 0) && (
+        <TeamStatsBar
+          homeName={homeName}
+          awayName={awayName}
+          homeStats={homePlayerStats}
+          awayStats={awayPlayerStats}
+          homePossession={homePossession}
+          awayPossession={awayPossession}
+        />
+      )}
+
       {events.length > 0 && (
         <MatchEventsList events={events} />
+      )}
+
+      {(homePlayerStats.length > 0 || awayPlayerStats.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <StatsTable title={homeName} players={homePlayerStats} />
+          <StatsTable title={awayName} players={awayPlayerStats} />
+        </div>
       )}
 
       {(homeLineup.length > 0 || awayLineup.length > 0) && (

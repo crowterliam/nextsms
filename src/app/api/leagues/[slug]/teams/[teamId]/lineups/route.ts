@@ -97,6 +97,16 @@ export async function POST(
     return NextResponse.json({ success: true, lineups: lineups.results });
   }
 
+  if (body.action === 'update_conditionals') {
+    const { lineup_id, conditionals } = body as { lineup_id: number; conditionals: string };
+    if (typeof lineup_id !== 'number' || lineup_id <= 0) return NextResponse.json({ error: 'lineup_id required' }, { status: 400 });
+    const condStr = typeof conditionals === 'string' ? conditionals : JSON.stringify(conditionals || '[]');
+    if (condStr.length > 10000) return NextResponse.json({ error: 'Conditionals data too large' }, { status: 400 });
+    await updateSavedLineup(env.DB, lineup_id, teamId, { conditionals: condStr });
+    const lineups = await getSavedLineups(env.DB, teamId);
+    return NextResponse.json({ success: true, lineups: lineups.results });
+  }
+
   const { name, formation, tactic_code, lineup, conditionals, penalty_taker_id, is_active } = body as {
     name: string;
     formation: string;

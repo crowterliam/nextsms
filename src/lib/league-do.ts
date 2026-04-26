@@ -9,14 +9,30 @@ import { simulateMatch } from "./simulator";
 import { configToLeagueConfig } from "./config";
 import { DEFAULT_CONFIG } from "./types";
 import type { Player, LeagueConfig, SimPlayer } from "./types";
-import {
-  generateKnockoutBracket,
-  generateTwoLeggedKnockoutBracket,
-  generateGroupDraw,
-  getAdvancingFromGroups,
-  generateNextKnockoutRound,
-  groupAdvancingToKnockoutSeedOrder,
-} from "./competition-engine";
+
+function formatPlayerStats(p: SimPlayer) {
+  // Rating scale: 1-10, base 4. Bonuses: goals(3), assists(2), saves(1), tackles(1),
+  // keypasses(1), shot accuracy(0-2). Penalties: yellow(-1), red(-3).
+  const rating = p.goals * 3 + p.assists * 2 + p.saves + p.tackles + p.keypasses
+    - p.yellowcards - p.redcards * 3
+    + (p.shots_on + p.shots_off > 0 ? Math.round((p.shots_on / (p.shots_on + p.shots_off)) * 2) : 0);
+  return {
+    name: p.name,
+    pos: p.pos,
+    goals: p.goals,
+    assists: p.assists,
+    shots: p.shots_on + p.shots_off,
+    shots_on: p.shots_on,
+    tackles: p.tackles,
+    saves: p.saves,
+    keypasses: p.keypasses,
+    fouls: p.fouls,
+    yellowcards: p.yellowcards,
+    redcards: p.redcards,
+    minutes: p.minutes,
+    rating: Math.max(1, 4 + rating),
+  };
+}
 
 interface LeagueState {
   season: number;
@@ -339,8 +355,9 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       const matchInsert = await this.env.DB.prepare(
         `INSERT INTO matches (home_team_id, away_team_id, home_tactic, away_tactic,
           home_lineup, away_lineup, home_conditionals, away_conditionals,
-          status, home_score, away_score, commentary, match_events, played_at, league_id)
-         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?)`
+          status, home_score, away_score, commentary, match_events, played_at, league_id,
+          home_stats, away_stats, home_possession, away_possession)
+         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           fixture.home_team_id,
@@ -354,7 +371,11 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
           matchResult.commentary,
           JSON.stringify(matchResult.events),
           new Date().toISOString(),
-          leagueId
+          leagueId,
+          JSON.stringify(matchResult.home_stats.map(formatPlayerStats)),
+          JSON.stringify(matchResult.away_stats.map(formatPlayerStats)),
+          matchResult.home_possession,
+          matchResult.away_possession
         )
         .run();
 
@@ -1440,15 +1461,19 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       const matchInsert = await this.env.DB.prepare(
         `INSERT INTO matches (home_team_id, away_team_id, home_tactic, away_tactic,
           home_lineup, away_lineup, home_conditionals, away_conditionals,
-          status, home_score, away_score, commentary, match_events, played_at, league_id)
-         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?)`
+          status, home_score, away_score, commentary, match_events, played_at, league_id,
+          home_stats, away_stats, home_possession, away_possession)
+         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         fixture.home_team_id, fixture.away_team_id,
         homeSheet.tactic, awaySheet.tactic,
         JSON.stringify(homeLineup.lineup), JSON.stringify(awayLineup.lineup),
         matchResult.home_score, matchResult.away_score,
         matchResult.commentary, JSON.stringify(matchResult.events),
-        new Date().toISOString(), leagueId
+        new Date().toISOString(), leagueId,
+        JSON.stringify(matchResult.home_stats.map(formatPlayerStats)),
+        JSON.stringify(matchResult.away_stats.map(formatPlayerStats)),
+        matchResult.home_possession, matchResult.away_possession
       ).run();
 
       const matchId = matchInsert.meta.last_row_id;

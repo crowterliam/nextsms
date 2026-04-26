@@ -18,8 +18,10 @@ export interface PlayerStats {
   tackles: number;
   saves: number;
   keypasses: number;
+  fouls: number;
   yellowcards: number;
   redcards: number;
+  minutes: number;
   rating: number;
 }
 
@@ -184,6 +186,79 @@ export function MatchScoreHeader({
   );
 }
 
+function aggregateStats(players: PlayerStats[]) {
+  return {
+    shots: players.reduce((s, p) => s + (p.shots || 0), 0),
+    shotsOn: players.reduce((s, p) => s + (p.shots_on || 0), 0),
+    tackles: players.reduce((s, p) => s + (p.tackles || 0), 0),
+    fouls: players.reduce((s, p) => s + (p.fouls || 0), 0),
+  };
+}
+
+function StatRow({ label, homeVal, awayVal }: { label: string; homeVal: number; awayVal: number }) {
+  const total = homeVal + awayVal || 1;
+  const homePct = Math.round((homeVal / total) * 100);
+  const awayPct = 100 - homePct;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="w-8 text-right font-mono">{homeVal}</span>
+        <div className="flex-1 text-center text-muted-foreground text-[11px]">{label}</div>
+        <span className="w-8 font-mono">{awayVal}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-8" />
+        <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-muted">
+          <div className="bg-primary/60 rounded-l-full" style={{ width: `${homePct}%` }} />
+          <div className="bg-primary/30 rounded-r-full" style={{ width: `${awayPct}%` }} />
+        </div>
+        <div className="w-8" />
+      </div>
+    </div>
+  );
+}
+
+export function TeamStatsBar({
+  homeName,
+  awayName,
+  homeStats,
+  awayStats,
+  homePossession,
+  awayPossession,
+}: {
+  homeName: string;
+  awayName: string;
+  homeStats: PlayerStats[];
+  awayStats: PlayerStats[];
+  homePossession: number;
+  awayPossession: number;
+}) {
+  const home = aggregateStats(homeStats);
+  const away = aggregateStats(awayStats);
+  const homeGoals = homeStats.reduce((s, p) => s + p.goals, 0);
+  const awayGoals = awayStats.reduce((s, p) => s + p.goals, 0);
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b border-border bg-muted/50">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Team Statistics</h2>
+      </div>
+      <div className="px-4 py-4 space-y-3">
+        <div className="flex justify-between text-xs font-semibold text-muted-foreground mb-1">
+          <span>{homeName}</span>
+          <span>{awayName}</span>
+        </div>
+        <StatRow label="Possession" homeVal={homePossession} awayVal={awayPossession} />
+        <StatRow label="Shots" homeVal={home.shots} awayVal={away.shots} />
+        <StatRow label="Shots on Target" homeVal={home.shotsOn} awayVal={away.shotsOn} />
+        <StatRow label="Tackles" homeVal={home.tackles} awayVal={away.tackles} />
+        <StatRow label="Fouls" homeVal={home.fouls} awayVal={away.fouls} />
+        <StatRow label="Goals" homeVal={homeGoals} awayVal={awayGoals} />
+      </div>
+    </div>
+  );
+}
+
 export function MatchEventsList({ events }: { events: MatchEventDisplay[] }) {
   if (!events?.length) return null;
   return (
@@ -258,15 +333,18 @@ export function StatsTable({ title, players }: { title: string; players: PlayerS
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Player</th>
-              <th className="px-2 py-2 text-center font-medium">G</th>
-              <th className="px-2 py-2 text-center font-medium">A</th>
-              <th className="px-2 py-2 text-center font-medium">Sh</th>
-              <th className="px-2 py-2 text-center font-medium">Tk</th>
-              <th className="px-2 py-2 text-center font-medium">Kp</th>
-              <th className="px-2 py-2 text-center font-medium">Sv</th>
-              <th className="px-2 py-2 text-center font-medium">C</th>
-              <th className="px-2 py-2 text-center font-bold">Rt</th>
+              <th className="px-2 py-2 text-left font-medium">Player</th>
+              <th className="px-1 py-2 text-center font-medium">Min</th>
+              <th className="px-1 py-2 text-center font-medium">G</th>
+              <th className="px-1 py-2 text-center font-medium">A</th>
+              <th className="px-1 py-2 text-center font-medium">Sh</th>
+              <th className="px-1 py-2 text-center font-medium">On</th>
+              <th className="px-1 py-2 text-center font-medium">Tk</th>
+              <th className="px-1 py-2 text-center font-medium">Kp</th>
+              <th className="px-1 py-2 text-center font-medium">Sv</th>
+              <th className="px-1 py-2 text-center font-medium">Fl</th>
+              <th className="px-1 py-2 text-center font-medium">C</th>
+              <th className="px-1 py-2 text-center font-bold">Rt</th>
             </tr>
           </thead>
           <tbody>
@@ -280,14 +358,17 @@ export function StatsTable({ title, players }: { title: string; players: PlayerS
                   ''
                 }`}
               >
-                <td className="px-3 py-1.5 font-medium">{p.name}</td>
-                <td className="px-2 py-1.5 text-center">{p.goals || ''}</td>
-                <td className="px-2 py-1.5 text-center">{p.assists || ''}</td>
-                <td className="px-2 py-1.5 text-center">{p.shots || ''}</td>
-                <td className="px-2 py-1.5 text-center">{p.tackles || ''}</td>
-                <td className="px-2 py-1.5 text-center">{p.keypasses || ''}</td>
-                <td className="px-2 py-1.5 text-center">{p.saves || ''}</td>
-                <td className="px-2 py-1.5 text-center">
+                <td className="px-2 py-1.5 font-medium whitespace-nowrap">{p.name}</td>
+                <td className="px-1 py-1.5 text-center text-muted-foreground">{p.minutes || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.goals || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.assists || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.shots || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.shots_on || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.tackles || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.keypasses || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.saves || ''}</td>
+                <td className="px-1 py-1.5 text-center">{p.fouls || ''}</td>
+                <td className="px-1 py-1.5 text-center">
                   {p.yellowcards > 0 && (
                     <span className="inline-block w-2 h-3 bg-warning rounded-sm mr-1 align-middle" />
                   )}
@@ -295,7 +376,7 @@ export function StatsTable({ title, players }: { title: string; players: PlayerS
                     <span className="inline-block w-2 h-3 bg-destructive rounded-sm align-middle" />
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-center font-bold">{p.rating || '-'}</td>
+                <td className="px-1 py-1.5 text-center font-bold">{p.rating || '-'}</td>
               </tr>
             ))}
           </tbody>

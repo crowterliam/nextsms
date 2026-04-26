@@ -171,10 +171,10 @@ async function doImport(
 
       if (parsed.players.length > 0) {
         const stmt = env.DB.prepare(
-          'INSERT INTO players (team_id, name, age, nationality, pref_side, st, tk, ps, sh, sm, ag, st_ab, tk_ab, ps_ab, sh_ab, games, saves, tackles, keypasses, shots, goals, assists, dp, injury, suspension, fitness) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO players (team_id, name, age, nationality, pref_side, st, tk, ps, sh, sm, ag, st_ab, tk_ab, ps_ab, sh_ab, games, saves, tackles, keypasses, shots, goals, assists, dp, injury, suspension, fitness, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         const batch = parsed.players.map((p) =>
-          stmt.bind(teamId, p.name, p.age, p.nationality, p.pref_side, p.st, p.tk, p.ps, p.sh, p.sm, p.ag, p.st_ab, p.tk_ab, p.ps_ab, p.sh_ab, p.games, p.saves, p.tackles, p.keypasses, p.shots, p.goals, p.assists, p.dp, p.injury, p.suspension, p.fitness)
+          stmt.bind(teamId, p.name, p.age, p.nationality, p.pref_side, p.st, p.tk, p.ps, p.sh, p.sm, p.ag, p.st_ab, p.tk_ab, p.ps_ab, p.sh_ab, p.games, p.saves, p.tackles, p.keypasses, p.shots, p.goals, p.assists, p.dp, p.injury, p.suspension, p.fitness, leagueId)
         );
         await env.DB.batch(batch);
         importedPlayers += parsed.players.length;
@@ -254,6 +254,10 @@ async function doImport(
         importedTable = true;
       }
     }
+  }
+
+  if (importedTeams > 0) {
+    await doStub.startNewSeason(leagueId);
   }
 
   return NextResponse.json({

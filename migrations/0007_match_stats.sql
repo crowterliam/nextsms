@@ -1,0 +1,4 @@
+ALTER TABLE matches ADD COLUMN home_stats TEXT DEFAULT '[]';
+ALTER TABLE matches ADD COLUMN away_stats TEXT DEFAULT '[]';
+ALTER TABLE matches ADD COLUMN home_possession INTEGER DEFAULT 50;
+ALTER TABLE matches ADD COLUMN away_possession INTEGER DEFAULT 50;
