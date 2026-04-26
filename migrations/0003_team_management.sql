@@ -72,3 +72,23 @@ CREATE INDEX IF NOT EXISTS idx_transfer_listings_status ON transfer_listings(sta
 CREATE INDEX IF NOT EXISTS idx_transfer_listings_league ON transfer_listings(league_id);
 CREATE INDEX IF NOT EXISTS idx_transfer_offers_listing ON transfer_offers(listing_id);
 CREATE INDEX IF NOT EXISTS idx_transfer_log_league ON transfer_log(league_id);
+
+CREATE TABLE IF NOT EXISTS league_invitations (
+  id TEXT PRIMARY KEY,
+  league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
+  league_name TEXT NOT NULL,
+  league_slug TEXT NOT NULL,
+  invited_email TEXT NOT NULL,
+  invited_user_id TEXT REFERENCES "user"(id) ON DELETE CASCADE,
+  inviter_user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member',
+  team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_league ON league_invitations(league_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_user ON league_invitations(invited_user_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON league_invitations(invited_email);
+CREATE INDEX IF NOT EXISTS idx_invitations_status ON league_invitations(status);

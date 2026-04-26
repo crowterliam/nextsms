@@ -22,14 +22,23 @@ export default function LeaguesPage() {
   const [newName, setNewName] = useState('');
   const [newSlug, setNewSlug] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState<Array<{ id: string; league_name: string; league_slug: string; role: string; invited_email: string }>>([]);
 
   useEffect(() => {
     if (session?.user) {
       fetchLeagues();
+      fetchInvitations();
     } else {
       setLoading(false);
     }
   }, [session]);
+
+  const fetchInvitations = async () => {
+    try {
+      const res = await fetch('/api/invitations');
+      if (res.ok) setPendingInvitations(await res.json());
+    } catch {}
+  };
 
   const fetchLeagues = async () => {
     try {
@@ -159,6 +168,43 @@ export default function LeaguesPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {pendingInvitations.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-3">Pending Invitations</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingInvitations.map(inv => (
+              <div key={inv.id} className="border border-primary/30 rounded-lg bg-primary/5 p-5">
+                <p className="font-semibold">{inv.league_name}</p>
+                <p className="text-sm text-muted-foreground mb-1">Role: <span className="capitalize">{inv.role}</span></p>
+                <div className="flex gap-2 mt-3">
+                  <button onClick={async () => {
+                    await fetch('/api/invitations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ invitation_id: inv.id, action: 'accept' }),
+                    });
+                    fetchInvitations();
+                    fetchLeagues();
+                  }} className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
+                    Accept
+                  </button>
+                  <button onClick={async () => {
+                    await fetch('/api/invitations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ invitation_id: inv.id, action: 'reject' }),
+                    });
+                    fetchInvitations();
+                  }} className="px-3 py-1.5 border border-border rounded-lg text-sm">
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

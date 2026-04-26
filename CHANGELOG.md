@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.1.0] - 2026-04-26
 
-- Team detail page with squad view, sortable player statistics table, and transfer listing
+### Added
 - Tactics management: save, edit, and delete team-specific tactic configurations (formation + tactic code + aggression)
 - Saved lineups: auto-generate and activate lineups for matches, view starting XI and substitutes
 - Transfer market: list players for transfer with asking price, make bids on available players
@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database migration 0003: team_tactics, team_saved_lineups, transfer_listings, transfer_offers, transfer_log tables
 - Transfer Market link on league detail page
 - Manage links on league teams list page
+- League invitations: invite users by email, assign role and team on invite
+- Invitation acceptance/rejection from the leagues dashboard
+- Members management page: view members, update roles, remove members, assign teams
+- Team manager assignment: assign any league member as a team manager from the members page
+- API route for league members (`/api/leagues/[slug]/members`)
+- API route for invitations (`/api/invitations`)
 
 ### Changed
 

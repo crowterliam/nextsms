@@ -289,6 +289,32 @@ export interface TransferLog {
   created_at: string;
 }
 
+export interface LeagueInvitation {
+  id: string;
+  league_id: string;
+  league_name: string;
+  league_slug: string;
+  invited_email: string;
+  invited_user_id: string | null;
+  inviter_user_id: string;
+  role: string;
+  team_id: number | null;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  created_at: string;
+}
+
+export interface LeagueMember {
+  id: number;
+  league_id: string;
+  user_id: string;
+  role: string;
+  email: string;
+  name: string;
+  team_id: number | null;
+  team_name: string | null;
+  joined_at: string;
+}
+
 export const FORMATIONS = [
   '433', '442', '451', '352', '343', '532', '541', '4231', '4141', '4222', '3511', '3412', '31312', '32122',
 ] as const;

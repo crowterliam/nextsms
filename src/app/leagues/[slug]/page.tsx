@@ -124,6 +124,14 @@ export default function LeagueDetailPage() {
           <p className="text-sm text-muted-foreground">Buy, sell, and loan players</p>
         </Link>
 
+        <Link
+          href={`/leagues/${slug}/members`}
+          className="group p-5 border border-border rounded-lg bg-card hover:border-primary/50 hover:-translate-y-0.5 transition-all"
+        >
+          <h2 className="text-lg font-semibold mb-1 group-hover:text-primary">Members</h2>
+          <p className="text-sm text-muted-foreground">Invite & manage league members</p>
+        </Link>
+
         {isAdmin && (
           <Link
             href={`/leagues/${slug}/config`}

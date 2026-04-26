@@ -381,3 +381,69 @@ export async function getTransferLog(db: D1Database, leagueId?: string) {
   }
   return db.prepare('SELECT * FROM transfer_log ORDER BY created_at DESC LIMIT 50').all();
 }
+
+export async function createInvitation(db: D1Database, data: {
+  id: string;
+  league_id: string;
+  league_name: string;
+  league_slug: string;
+  invited_email: string;
+  invited_user_id: string | null;
+  inviter_user_id: string;
+  role: string;
+  team_id: number | null;
+}) {
+  return db.prepare(
+    'INSERT INTO league_invitations (id, league_id, league_name, league_slug, invited_email, invited_user_id, inviter_user_id, role, team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(data.id, data.league_id, data.league_name, data.league_slug, data.invited_email, data.invited_user_id, data.inviter_user_id, data.role, data.team_id).run();
+}
+
+export async function getPendingInvitationsForUser(db: D1Database, userId: string, email: string) {
+  return db.prepare(
+    `SELECT * FROM league_invitations WHERE (invited_user_id = ? OR invited_email = ?) AND status = 'pending' ORDER BY created_at DESC`
+  ).bind(userId, email).all();
+}
+
+export async function getPendingInvitationsForLeague(db: D1Database, leagueId: string) {
+  return db.prepare(
+    `SELECT li.*, u.name as inviter_name FROM league_invitations li JOIN "user" u ON li.inviter_user_id = u.id WHERE li.league_id = ? AND li.status = 'pending' ORDER BY li.created_at DESC`
+  ).bind(leagueId).all();
+}
+
+export async function getInvitation(db: D1Database, invitationId: string) {
+  return db.prepare('SELECT * FROM league_invitations WHERE id = ?').bind(invitationId).first();
+}
+
+export async function updateInvitationStatus(db: D1Database, invitationId: string, status: string) {
+  return db.prepare("UPDATE league_invitations SET status = ?, updated_at = datetime('now') WHERE id = ?").bind(status, invitationId).run();
+}
+
+export async function getLeagueMembers(db: D1Database, leagueId: string) {
+  return db.prepare(
+    `SELECT lm.*, u.name, u.email, t.name as team_name, tm.id as managed_team_id, mt.name as managed_team_name
+     FROM league_members lm
+     JOIN "user" u ON lm.user_id = u.id
+     LEFT JOIN teams t ON t.manager_user_id = lm.user_id AND t.league_id = lm.league_id
+     LEFT JOIN teams tm ON tm.manager_user_id = lm.user_id AND tm.league_id = ?
+     WHERE lm.league_id = ?
+     ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name`
+  ).bind(leagueId, leagueId).all();
+}
+
+export async function addLeagueMember(db: D1Database, leagueId: string, userId: string, role: string) {
+  return db.prepare(
+    'INSERT OR IGNORE INTO league_members (league_id, user_id, role) VALUES (?, ?, ?)'
+  ).bind(leagueId, userId, role).run();
+}
+
+export async function updateMemberRole(db: D1Database, leagueId: string, userId: string, role: string) {
+  return db.prepare('UPDATE league_members SET role = ? WHERE league_id = ? AND user_id = ?').bind(role, leagueId, userId).run();
+}
+
+export async function removeLeagueMember(db: D1Database, leagueId: string, userId: string) {
+  return db.prepare('DELETE FROM league_members WHERE league_id = ? AND user_id = ?').bind(leagueId, userId).run();
+}
+
+export async function assignTeamManager(db: D1Database, teamId: number, userId: string | null) {
+  return db.prepare('UPDATE teams SET manager_user_id = ? WHERE id = ?').bind(userId, teamId).run();
+}
