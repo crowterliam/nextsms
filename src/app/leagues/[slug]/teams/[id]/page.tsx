@@ -272,7 +272,12 @@ export default function TeamDetailPage() {
   };
 
   const formatConditional = (c: Record<string, unknown>): string => {
-    const action = c.action as Record<string, string>;
+    if (typeof c.raw === 'string') return c.raw;
+    if (typeof c === 'string') return c;
+
+    const action = c.action as Record<string, string> | undefined;
+    if (!action) return JSON.stringify(c);
+
     let actionStr = '';
     if (action.type === 'TACTIC') {
       actionStr = `TACTIC ${action.tactic}`;
@@ -282,7 +287,9 @@ export default function TeamDetailPage() {
       actionStr = `SUB ${action.position} ${action.player_ref} ${action.player_ref2}`;
     }
 
-    const conditions = c.conditions as Array<Record<string, string | number>>;
+    const conditions = c.conditions as Array<Record<string, string | number>> | undefined;
+    if (!conditions) return JSON.stringify(c);
+
     const condStr = conditions.map(cond => {
       if (cond.type === 'MIN' || cond.type === 'SCORE') {
         return `${cond.type} ${cond.sign} ${cond.value}`;
@@ -298,16 +305,15 @@ export default function TeamDetailPage() {
     if (!preview) return;
 
     const existing = JSON.parse(lineup.conditionals || '[]');
-    existing.push({ raw: preview, text: preview });
-    const newConditionals = existing.map((c: { raw?: string; text?: string; parsed?: string }) => {
-      if (c.raw) return { raw: c.raw };
-      return c;
-    });
+    const items: string[] = existing.map((c: { raw?: string } | string) =>
+      typeof c === 'string' ? c : c.raw || JSON.stringify(c)
+    );
+    items.push(preview);
 
     await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(newConditionals) }),
+      body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(items) }),
     });
 
     setCondEditing(false);
@@ -320,13 +326,15 @@ export default function TeamDetailPage() {
 
   const removeConditional = async (lineup: SavedLineup, index: number) => {
     const existing = JSON.parse(lineup.conditionals || '[]');
-    const cleaned = existing.filter((_: unknown, i: number) => i !== index);
-    const newConditionals = cleaned.map((c: { raw?: string }) => c.raw ? { raw: c.raw } : c);
+    const items: string[] = existing.map((c: { raw?: string } | string) =>
+      typeof c === 'string' ? c : c.raw || JSON.stringify(c)
+    );
+    items.splice(index, 1);
 
     await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(newConditionals) }),
+      body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(items) }),
     });
 
     fetchTeam();
@@ -765,7 +773,8 @@ export default function TeamDetailPage() {
                   const parsed = JSON.parse(selectedLineup.conditionals || '[]');
                   if (Array.isArray(parsed)) {
                     for (const c of parsed) {
-                      existingConds.push({ raw: JSON.stringify(c), parsed: formatConditional(c) });
+                      const text = typeof c === 'string' ? c : formatConditional(c as Record<string, unknown>);
+                      if (text) existingConds.push({ raw: text, parsed: text });
                     }
                   }
                 } catch {}
