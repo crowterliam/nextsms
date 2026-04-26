@@ -217,10 +217,10 @@ export async function getTeamTactics(db: D1Database, teamId: number) {
   return db.prepare('SELECT * FROM team_tactics WHERE team_id = ? ORDER BY is_default DESC, tactic_code').bind(teamId).all();
 }
 
-export async function upsertTeamTactic(db: D1Database, teamId: number, tacticCode: string, formation: string, aggression: number, isDefault: boolean) {
+export async function upsertTeamTactic(db: D1Database, teamId: number, tacticCode: string, aggression: number, isDefault: boolean) {
   return db.prepare(
     'INSERT INTO team_tactics (team_id, tactic_code, formation, aggression, is_default) VALUES (?, ?, ?, ?, ?) ON CONFLICT(team_id, tactic_code) DO UPDATE SET formation = ?, aggression = ?, is_default = ?, updated_at = datetime(\'now\')'
-  ).bind(teamId, tacticCode, formation, aggression, isDefault ? 1 : 0, formation, aggression, isDefault ? 1 : 0).run();
+  ).bind(teamId, tacticCode, '442', aggression, isDefault ? 1 : 0, '442', aggression, isDefault ? 1 : 0).run();
 }
 
 export async function deleteTeamTactic(db: D1Database, id: number, teamId: number) {
@@ -240,17 +240,18 @@ export async function saveLineup(db: D1Database, data: {
   name: string;
   formation: string;
   tactic_code: string;
+  aggression: number;
   lineup: string;
   conditionals: string;
   penalty_taker_id: number | null;
   is_active: number;
 }) {
   return db.prepare(
-    'INSERT INTO team_saved_lineups (team_id, name, formation, tactic_code, lineup, conditionals, penalty_taker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(data.team_id, data.name, data.formation, data.tactic_code, data.lineup, data.conditionals, data.penalty_taker_id, data.is_active).run();
+    'INSERT INTO team_saved_lineups (team_id, name, formation, tactic_code, aggression, lineup, conditionals, penalty_taker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(data.team_id, data.name, data.formation, data.tactic_code, data.aggression, data.lineup, data.conditionals, data.penalty_taker_id, data.is_active).run();
 }
 
-const LINEUP_COLUMNS = new Set(['name', 'formation', 'tactic_code', 'lineup', 'conditionals', 'penalty_taker_id', 'is_active']);
+const LINEUP_COLUMNS = new Set(['name', 'formation', 'tactic_code', 'aggression', 'lineup', 'conditionals', 'penalty_taker_id', 'is_active']);
 
 export async function updateSavedLineup(db: D1Database, id: number, teamId: number, updates: Record<string, unknown>) {
   const safe = filterUpdates(updates, LINEUP_COLUMNS);

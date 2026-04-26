@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Conditionals tab on team detail page: create, view, and remove tactical instructions (TACTIC, CHANGEPOS, SUB) with conditions (MIN, SCORE, YELLOW, RED, INJ) for saved lineups
-- Structured conditional builder form with position/tactic dropdowns, condition editor, and live preview
-- `update_conditionals` action on lineups API for saving conditional instructions to existing saved lineups
+- Manual lineup editing: change formation, tactic, aggression, and swap individual players from starting XI and substitutes via dropdown selectors
+- `update_lineup` action on lineups API for editing saved lineup formation, tactic, aggression, and player assignments
+- `aggression` column on saved lineups (migration 0008) — the active lineup now contains all match configuration in one place
+- Simulation engine now uses the team's active saved lineup (formation, tactic, players, conditionals, penalty taker) instead of hardcoded "442N"
+- Conditionals are now evaluated during match simulation when the active lineup has them configured
+
+### Changed
+
+- Tactics tab no longer stores formation — formation belongs to lineups only; tactics are now simple presets (tactic code + aggression)
+- Lineups tab reordered before Tactics in the team detail page navigation
+- `upsertTeamTactic` no longer requires a formation parameter
 
 - Match reports now show full live commentary from the simulation engine instead of synthetic event labels
 - Player-by-player match statistics table: goals, assists, shots, tackles, key passes, saves, fouls, cards, minutes played, and rating

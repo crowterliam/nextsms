@@ -4,7 +4,6 @@ import { requireAuth, requireLeagueMember, requireTeamManager } from '@/lib/auth
 import { getTeamTactics, upsertTeamTactic, deleteTeamTactic } from '@/lib/db';
 
 const VALID_TACTICS = new Set(['N', 'D', 'A', 'C', 'L', 'P']);
-const VALID_FORMATIONS = new Set(['433', '442', '451', '352', '343', '532', '541', '4231', '4141', '4222', '3511', '3412', '31312', '32122']);
 
 export const runtime = 'edge';
 
@@ -49,29 +48,25 @@ export async function POST(
   if (memberError) return memberError;
 
   const body = await request.json();
-  const { tactic_code, formation, aggression, is_default } = body as {
+  const { tactic_code, aggression, is_default } = body as {
     tactic_code: string;
-    formation: string;
     aggression: number;
     is_default?: boolean;
   };
 
-  if (!tactic_code || !formation) {
-    return NextResponse.json({ error: 'tactic_code and formation required' }, { status: 400 });
+  if (!tactic_code) {
+    return NextResponse.json({ error: 'tactic_code required' }, { status: 400 });
   }
 
   const tc = tactic_code.toUpperCase();
   if (!VALID_TACTICS.has(tc)) {
     return NextResponse.json({ error: 'Invalid tactic_code' }, { status: 400 });
   }
-  if (!VALID_FORMATIONS.has(formation)) {
-    return NextResponse.json({ error: 'Invalid formation' }, { status: 400 });
-  }
   if (typeof aggression !== 'number' || aggression < 0 || aggression > 100) {
     return NextResponse.json({ error: 'Aggression must be 0-100' }, { status: 400 });
   }
 
-  await upsertTeamTactic(env.DB, teamId, tc, formation, aggression, is_default ?? false);
+  await upsertTeamTactic(env.DB, teamId, tc, aggression, is_default ?? false);
   const tactics = await getTeamTactics(env.DB, teamId);
   return NextResponse.json({ success: true, tactics: tactics.results });
 }

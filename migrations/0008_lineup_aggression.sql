@@ -1,0 +1,1 @@
+ALTER TABLE team_saved_lineups ADD COLUMN aggression INTEGER NOT NULL DEFAULT 50;

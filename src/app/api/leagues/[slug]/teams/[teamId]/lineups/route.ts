@@ -55,6 +55,7 @@ export async function POST(
   if (body.action === 'auto_generate') {
     const formation = (body.formation as string) || '442';
     const tacticCode = (body.tactic_code as string) || 'N';
+    const aggression = typeof body.aggression === 'number' ? body.aggression : 50;
     const name = (body.name as string) || `${formation}${tacticCode}`;
 
     const playersResult = await getPlayers(env.DB, teamId);
@@ -65,12 +66,12 @@ export async function POST(
     const sheet = createTeamsheet(roster, `${formation}${tacticCode}`, '', 5);
     const { lineup, penalty_taker } = teamsheetToLineup(sheet);
 
-    const team = await getTeam(env.DB, teamId);
     await saveLineup(env.DB, {
       team_id: teamId,
       name,
       formation,
       tactic_code: tacticCode,
+      aggression,
       lineup: JSON.stringify(lineup),
       conditionals: '[]',
       penalty_taker_id: penalty_taker ? roster.find(p => p.name === penalty_taker)?.id ?? null : null,
@@ -107,10 +108,45 @@ export async function POST(
     return NextResponse.json({ success: true, lineups: lineups.results });
   }
 
-  const { name, formation, tactic_code, lineup, conditionals, penalty_taker_id, is_active } = body as {
+  if (body.action === 'update_lineup') {
+    const { lineup_id, formation, tactic_code, aggression, lineup, name } = body as {
+      lineup_id: number;
+      formation?: string;
+      tactic_code?: string;
+      aggression?: number;
+      lineup?: string;
+      name?: string;
+    };
+    if (typeof lineup_id !== 'number' || lineup_id <= 0) return NextResponse.json({ error: 'lineup_id required' }, { status: 400 });
+
+    const updates: Record<string, unknown> = {};
+    if (formation) updates.formation = formation;
+    if (tactic_code) updates.tactic_code = tactic_code;
+    if (typeof aggression === 'number') updates.aggression = aggression;
+    if (name) updates.name = name;
+
+    if (lineup) {
+      const lineupStr = typeof lineup === 'string' ? lineup : JSON.stringify(lineup);
+      if (lineupStr.length > 10000) {
+        return NextResponse.json({ error: 'Lineup data too large' }, { status: 400 });
+      }
+      updates.lineup = lineupStr;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
+    await updateSavedLineup(env.DB, lineup_id, teamId, updates);
+    const lineups = await getSavedLineups(env.DB, teamId);
+    return NextResponse.json({ success: true, lineups: lineups.results });
+  }
+
+  const { name, formation, tactic_code, aggression, lineup, conditionals, penalty_taker_id, is_active } = body as {
     name: string;
     formation: string;
     tactic_code: string;
+    aggression?: number;
     lineup: string;
     conditionals?: string;
     penalty_taker_id?: number | null;
@@ -135,6 +171,7 @@ export async function POST(
     name,
     formation,
     tactic_code,
+    aggression: typeof aggression === 'number' ? aggression : 50,
     lineup: typeof lineup === 'string' ? lineup : JSON.stringify(lineup),
     conditionals: typeof conditionals === 'string' ? conditionals : JSON.stringify(conditionals || []),
     penalty_taker_id: penalty_taker_id ?? null,

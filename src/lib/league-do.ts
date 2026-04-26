@@ -9,6 +9,8 @@ import { simulateMatch } from "./simulator";
 import { configToLeagueConfig } from "./config";
 import { DEFAULT_CONFIG } from "./types";
 import type { Player, LeagueConfig, SimPlayer } from "./types";
+import { parseConditionals } from "./conditionals";
+import type { ConditionalInstruction } from "./types";
 
 function formatPlayerStats(p: SimPlayer) {
   // Rating scale: 1-10, base 4. Bonuses: goals(3), assists(2), saves(1), tackles(1),
@@ -331,24 +333,22 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       const awayRoster = awayPlayers.results as Player[];
       if (!homeRoster.length || !awayRoster.length) continue;
 
-      const homeSheet = createTeamsheet(homeRoster, "442N", "", 5);
-      const awaySheet = createTeamsheet(awayRoster, "442N", "", 5);
-      const homeLineup = teamsheetToLineup(homeSheet);
-      const awayLineup = teamsheetToLineup(awaySheet);
+      const homeResolved = await this.resolveTeamLineup(fixture.home_team_id, homeRoster);
+      const awayResolved = await this.resolveTeamLineup(fixture.away_team_id, awayRoster);
 
       const matchResult = simulateMatch(
         homeRoster,
         awayRoster,
-        homeLineup.lineup,
-        awayLineup.lineup,
-        homeSheet.tactic,
-        awaySheet.tactic,
+        homeResolved.lineup,
+        awayResolved.lineup,
+        homeResolved.tactic,
+        awayResolved.tactic,
         fixture.home_team_name,
         fixture.away_team_name,
-        [],
-        [],
-        homeLineup.penalty_taker,
-        awayLineup.penalty_taker,
+        homeResolved.conditionals,
+        awayResolved.conditionals,
+        homeResolved.penaltyTaker,
+        awayResolved.penaltyTaker,
         config
       );
 
@@ -357,15 +357,17 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
           home_lineup, away_lineup, home_conditionals, away_conditionals,
           status, home_score, away_score, commentary, match_events, played_at, league_id,
           home_stats, away_stats, home_possession, away_possession)
-         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           fixture.home_team_id,
           fixture.away_team_id,
-          homeSheet.tactic,
-          awaySheet.tactic,
-          JSON.stringify(homeLineup.lineup),
-          JSON.stringify(awayLineup.lineup),
+          homeResolved.tactic,
+          awayResolved.tactic,
+          JSON.stringify(homeResolved.lineup),
+          JSON.stringify(awayResolved.lineup),
+          JSON.stringify(homeResolved.conditionals),
+          JSON.stringify(awayResolved.conditionals),
           matchResult.home_score,
           matchResult.away_score,
           matchResult.commentary,
@@ -518,10 +520,8 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       return { error: "Both teams need players" };
     }
 
-    const homeSheet = createTeamsheet(homeRoster, "442N", "", 5);
-    const awaySheet = createTeamsheet(awayRoster, "442N", "", 5);
-    const homeLineup = teamsheetToLineup(homeSheet);
-    const awayLineup = teamsheetToLineup(awaySheet);
+    const homeResolved = await this.resolveTeamLineup(homeTeamId, homeRoster);
+    const awayResolved = await this.resolveTeamLineup(awayTeamId, awayRoster);
 
     const homeTeam = (await this.env.DB.prepare(
       "SELECT name FROM teams WHERE id = ?"
@@ -537,16 +537,16 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     const matchResult = simulateMatch(
       homeRoster,
       awayRoster,
-      homeLineup.lineup,
-      awayLineup.lineup,
-      homeSheet.tactic,
-      awaySheet.tactic,
+      homeResolved.lineup,
+      awayResolved.lineup,
+      homeResolved.tactic,
+      awayResolved.tactic,
       homeTeam?.name || "Home",
       awayTeam?.name || "Away",
-      [],
-      [],
-      homeLineup.penalty_taker,
-      awayLineup.penalty_taker,
+      homeResolved.conditionals,
+      awayResolved.conditionals,
+      homeResolved.penaltyTaker,
+      awayResolved.penaltyTaker,
       config,
       seed
     );
@@ -556,15 +556,15 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       away_score: matchResult.away_score,
       events: matchResult.events,
       commentary: matchResult.commentary,
-      home_tactic: homeSheet.tactic,
-      away_tactic: awaySheet.tactic,
-      home_starting: homeSheet.starting.map((s) => ({
+      home_tactic: homeResolved.tactic,
+      away_tactic: awayResolved.tactic,
+      home_starting: homeResolved.lineup.filter(p => !p.is_sub).map((s) => ({
         position: s.position,
-        name: s.player.name,
+        name: s.name,
       })),
-      away_starting: awaySheet.starting.map((s) => ({
+      away_starting: awayResolved.lineup.filter(p => !p.is_sub).map((s) => ({
         position: s.position,
-        name: s.player.name,
+        name: s.name,
       })),
     };
   }
@@ -1444,17 +1444,16 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       const awayRoster = awayPlayers.results as unknown as Player[];
       if (!homeRoster.length || !awayRoster.length) continue;
 
-      const homeSheet = createTeamsheet(homeRoster, "442N", "", 5);
-      const awaySheet = createTeamsheet(awayRoster, "442N", "", 5);
-      const homeLineup = teamsheetToLineup(homeSheet);
-      const awayLineup = teamsheetToLineup(awaySheet);
+      const homeResolved = await this.resolveTeamLineup(fixture.home_team_id, homeRoster);
+      const awayResolved = await this.resolveTeamLineup(fixture.away_team_id, awayRoster);
 
       const matchResult = simulateMatch(
         homeRoster, awayRoster,
-        homeLineup.lineup, awayLineup.lineup,
-        homeSheet.tactic, awaySheet.tactic,
+        homeResolved.lineup, awayResolved.lineup,
+        homeResolved.tactic, awayResolved.tactic,
         fixture.home_team_name, fixture.away_team_name,
-        [], [], homeLineup.penalty_taker, awayLineup.penalty_taker,
+        homeResolved.conditionals, awayResolved.conditionals,
+        homeResolved.penaltyTaker, awayResolved.penaltyTaker,
         config
       );
 
@@ -1463,11 +1462,12 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
           home_lineup, away_lineup, home_conditionals, away_conditionals,
           status, home_score, away_score, commentary, match_events, played_at, league_id,
           home_stats, away_stats, home_possession, away_possession)
-         VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'played', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         fixture.home_team_id, fixture.away_team_id,
-        homeSheet.tactic, awaySheet.tactic,
-        JSON.stringify(homeLineup.lineup), JSON.stringify(awayLineup.lineup),
+        homeResolved.tactic, awayResolved.tactic,
+        JSON.stringify(homeResolved.lineup), JSON.stringify(awayResolved.lineup),
+        JSON.stringify(homeResolved.conditionals), JSON.stringify(awayResolved.conditionals),
         matchResult.home_score, matchResult.away_score,
         matchResult.commentary, JSON.stringify(matchResult.events),
         new Date().toISOString(), leagueId,
@@ -1692,6 +1692,67 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
         "UPDATE competition_standings SET played = played + 1, drawn = drawn + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 1 WHERE competition_id = ? AND stage_id = ? AND group_id IS ? AND team_id = ?"
       ).bind(awayGoals, homeGoals, 0, competitionId, stageId, groupId, awayId).run();
     }
+  }
+
+  private async resolveTeamLineup(teamId: number, roster: Player[]): Promise<{
+    lineup: Array<{ position: string; player_id: number; name: string; is_sub: boolean; sub_order: number }>;
+    tactic: string;
+    conditionals: ConditionalInstruction[];
+    penaltyTaker: string | null;
+  }> {
+    const saved = await this.env.DB.prepare(
+      'SELECT * FROM team_saved_lineups WHERE team_id = ? AND is_active = 1'
+    ).bind(teamId).first<{
+      id: number; formation: string; tactic_code: string; lineup: string; conditionals: string; penalty_taker_id: number | null;
+    }>();
+
+    if (saved) {
+      const lineupData = JSON.parse(saved.lineup || '[]') as Array<{
+        position: string; player_id: number; name: string; is_sub: boolean; sub_order: number;
+      }>;
+      const filtered = lineupData.filter(lp => roster.some(p => p.id === lp.player_id && p.injury === 0 && p.suspension === 0));
+
+      const condRaw: string[] = [];
+      try {
+        const parsed = JSON.parse(saved.conditionals || '[]');
+        if (Array.isArray(parsed)) {
+          for (const c of parsed) {
+            condRaw.push(typeof c === 'string' ? c : (c as { raw?: string }).raw || JSON.stringify(c));
+          }
+        }
+      } catch {}
+
+      let penaltyTaker: string | null = null;
+      if (saved.penalty_taker_id) {
+        const pt = roster.find(p => p.id === saved.penalty_taker_id);
+        if (pt) penaltyTaker = pt.name;
+      }
+      if (!penaltyTaker) {
+        const starters = filtered.filter(p => !p.is_sub);
+        let bestSh = -1;
+        for (const s of starters) {
+          const player = roster.find(p => p.id === s.player_id);
+          if (player && player.sh > bestSh) {
+            bestSh = player.sh;
+            penaltyTaker = player.name;
+          }
+        }
+      }
+
+      return {
+        lineup: filtered,
+        tactic: saved.tactic_code,
+        conditionals: parseConditionals(condRaw),
+        penaltyTaker,
+      };
+    }
+
+    const team = await this.env.DB.prepare('SELECT default_formation, default_tactic FROM teams WHERE id = ?').bind(teamId).first<{ default_formation: string; default_tactic: string }>();
+    const formation = team?.default_formation || '442';
+    const tactic = team?.default_tactic || 'N';
+    const sheet = createTeamsheet(roster, `${formation}${tactic}`, '', 5);
+    const { lineup, penalty_taker } = teamsheetToLineup(sheet);
+    return { lineup, tactic: sheet.tactic, conditionals: [], penaltyTaker: penalty_taker };
   }
 
   private async loadConfig(leagueId: string): Promise<LeagueConfig> {
