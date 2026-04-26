@@ -38,14 +38,18 @@ export default function LeagueMatchesPage() {
       ) : (
         <div className="space-y-2">
           {matches.map((m) => (
-            <div key={m.id as number} className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card">
-              <span className="flex-1 text-right font-medium">{m.home_team_id as number}</span>
+            <Link
+              key={m.id as number}
+              href={`/leagues/${slug}/matches/${m.id}`}
+              className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card hover:bg-muted/50 transition-colors"
+            >
+              <span className="flex-1 text-right font-medium">{(m.home_team_name as string) || `Team ${m.home_team_id}`}</span>
               <span className="px-3 py-1 bg-muted rounded font-mono font-bold">
                 {m.home_score as number} - {m.away_score as number}
               </span>
-              <span className="flex-1 font-medium">{m.away_team_id as number}</span>
+              <span className="flex-1 font-medium">{(m.away_team_name as string) || `Team ${m.away_team_id}`}</span>
               <span className="text-xs text-muted-foreground">{m.played_at ? new Date(m.played_at as string).toLocaleDateString() : ''}</span>
-            </div>
+            </Link>
           ))}
         </div>
       )}

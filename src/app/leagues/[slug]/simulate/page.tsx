@@ -3,11 +3,35 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import {
+  MatchScoreHeader,
+  MatchEventsList,
+  LineupTable,
+  StatsTable,
+} from '@/components/match-report';
+import type { MatchEventDisplay, PlayerStats, LineupPlayer } from '@/components/match-report';
 
 interface Team {
   id: number;
   name: string;
   abbreviation: string;
+}
+
+interface SimulateResult {
+  home_score: number;
+  away_score: number;
+  events: MatchEventDisplay[];
+  home_tactic: string;
+  away_tactic: string;
+  home_starting: LineupPlayer[];
+  away_starting: LineupPlayer[];
+  home_stats?: PlayerStats[];
+  away_stats?: PlayerStats[];
+  penalties?: {
+    home_score: number;
+    away_score: number;
+    rounds: Array<{ home_scored: boolean; away_scored: boolean; home_taker: string; away_taker: string }>;
+  };
 }
 
 export default function LeagueSimulatePage() {
@@ -16,7 +40,7 @@ export default function LeagueSimulatePage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [homeId, setHomeId] = useState('');
   const [awayId, setAwayId] = useState('');
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [result, setResult] = useState<SimulateResult | null>(null);
   const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
@@ -61,43 +85,70 @@ export default function LeagueSimulatePage() {
       </div>
       <h1 className="text-2xl font-bold mb-6">Quick Simulate</h1>
 
-      <div className="p-5 border border-border rounded-lg bg-card mb-6">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1 text-muted-foreground">Home Team</label>
-            <select value={homeId} onChange={(e) => setHomeId(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg">
-              <option value="">Select team...</option>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      <div className="rounded-lg border border-border bg-card p-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Home Team</label>
+            <select
+              value={homeId}
+              onChange={e => setHomeId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="">Select home team...</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
             </select>
           </div>
-          <span className="pb-2 text-muted-foreground font-bold">vs</span>
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1 text-muted-foreground">Away Team</label>
-            <select value={awayId} onChange={(e) => setAwayId(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg">
-              <option value="">Select team...</option>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Away Team</label>
+            <select
+              value={awayId}
+              onChange={e => setAwayId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="">Select away team...</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
             </select>
           </div>
-          <button onClick={handleSimulate} disabled={simulating} className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium disabled:opacity-50">
-            {simulating ? 'Simulating...' : 'Simulate'}
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-end gap-4 pt-4 border-t border-border">
+          <button
+            onClick={handleSimulate}
+            disabled={simulating || !homeId || !awayId}
+            className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark text-sm font-medium disabled:opacity-50 transition-colors flex items-center gap-2"
+          >
+            {simulating ? 'Simulating...' : 'Simulate Match'}
           </button>
         </div>
       </div>
 
       {result && (
-        <div className="p-5 border border-border rounded-lg bg-card">
-          <div className="text-center mb-4">
-            <span className="text-3xl font-bold">{result.home_score} - {result.away_score}</span>
+        <div className="space-y-6">
+          <MatchScoreHeader
+            homeName={teams.find(t => t.id === parseInt(homeId))?.name || 'Home'}
+            awayName={teams.find(t => t.id === parseInt(awayId))?.name || 'Away'}
+            homeScore={result.home_score}
+            awayScore={result.away_score}
+            homeTactic={result.home_tactic}
+            awayTactic={result.away_tactic}
+            penalties={result.penalties}
+          />
+
+          <MatchEventsList events={result.events} />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <LineupTable title={`Home Lineup (${result.home_tactic})`} players={result.home_starting} />
+            <LineupTable title={`Away Lineup (${result.away_tactic})`} players={result.away_starting} />
           </div>
-          {Array.isArray(result.events) && (
-            <div className="space-y-2">
-              <h3 className="font-semibold">Events</h3>
-              {(result.events as Array<Record<string, unknown>>).map((ev, i) => (
-                <div key={i} className="text-sm flex gap-2">
-                  <span className="text-muted-foreground">{ev.minute}&apos;</span>
-                  <span>{ev.player as string} — {ev.type as string}</span>
-                </div>
-              ))}
+
+          {result.home_stats && result.away_stats && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <StatsTable title="Home Stats" players={result.home_stats} />
+              <StatsTable title="Away Stats" players={result.away_stats} />
             </div>
           )}
         </div>

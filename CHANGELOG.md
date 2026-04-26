@@ -5,6 +5,22 @@ All notable changes to NextSMS are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- Admin management API at `/api/leagues/[slug]/admin` with actions: reset_fixture, reset_week, reset_all, delete_matches, edit_score, resimulate
+- Match report page at `/leagues/[slug]/matches/[id]` showing scoreline, events, lineups, and full commentary
+- Match detail API at `/api/leagues/[slug]/matches/[id]` with team names, and DELETE for admins
+- Fixtures page admin controls: reset individual fixtures, reset entire weeks, reset all results
+- Matches page now shows team names and links to match reports
+- Fixture results link to match reports
+
+### Fixed
+
+- Fixed `advanceWeek` crash with "no such column: league_id" on players table — added migration 0005 to add `league_id` column to players, and changed advance queries to use `WHERE team_id IN (SELECT id FROM teams WHERE league_id = ?)` for backwards compatibility
+- New players created via `addTeam` now have `league_id` set correctly
+
 ## [1.2.0] - 2026-04-26
 
 ### Added

@@ -105,7 +105,7 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     if (team && !skipRoster) {
       const roster = generateRoster();
       const stmt = this.env.DB.prepare(
-        "INSERT INTO players (team_id, name, age, nationality, pref_side, st, tk, ps, sh, sm, ag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO players (team_id, name, age, nationality, pref_side, st, tk, ps, sh, sm, ag, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const batch = roster.players.map((p) =>
         stmt.bind(
@@ -119,7 +119,8 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
           p.ps,
           p.sh,
           p.sm,
-          p.ag
+          p.ag,
+          leagueId
         )
       );
       await this.env.DB.batch(batch);
@@ -380,17 +381,17 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     }
 
     await this.env.DB.prepare(
-      "UPDATE players SET suspension = CASE WHEN suspension > 0 THEN suspension - 1 ELSE 0 END WHERE league_id = ?"
+      "UPDATE players SET suspension = CASE WHEN suspension > 0 THEN suspension - 1 ELSE 0 END WHERE team_id IN (SELECT id FROM teams WHERE league_id = ?)"
     )
       .bind(leagueId)
       .run();
     await this.env.DB.prepare(
-      "UPDATE players SET injury = CASE WHEN injury > 0 THEN injury - 1 ELSE 0 END WHERE league_id = ?"
+      "UPDATE players SET injury = CASE WHEN injury > 0 THEN injury - 1 ELSE 0 END WHERE team_id IN (SELECT id FROM teams WHERE league_id = ?)"
     )
       .bind(leagueId)
       .run();
     await this.env.DB.prepare(
-      "UPDATE players SET fitness = CASE WHEN injury > 0 THEN fitness WHEN fitness + ? > 100 THEN 100 ELSE fitness + ? END WHERE league_id = ?"
+      "UPDATE players SET fitness = CASE WHEN injury > 0 THEN fitness WHEN fitness + ? > 100 THEN 100 ELSE fitness + ? END WHERE team_id IN (SELECT id FROM teams WHERE league_id = ?)"
     )
       .bind(
         config.updtr_fitness_gain,
@@ -434,7 +435,12 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     limit: number = 50
   ): Promise<Array<Record<string, unknown>>> {
     const result = await this.env.DB.prepare(
-      "SELECT * FROM matches WHERE league_id = ? ORDER BY created_at DESC LIMIT ?"
+      `SELECT m.*, ht.name as home_team_name, at.name as away_team_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       JOIN teams at ON m.away_team_id = at.id
+       WHERE m.league_id = ?
+       ORDER BY m.created_at DESC LIMIT ?`
     )
       .bind(leagueId, limit)
       .all();
@@ -444,9 +450,16 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
   async getMatch(
     matchId: number
   ): Promise<Record<string, unknown> | null> {
-    return this.env.DB.prepare("SELECT * FROM matches WHERE id = ?")
+    const result = await this.env.DB.prepare(
+      `SELECT m.*, ht.name as home_team_name, at.name as away_team_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       JOIN teams at ON m.away_team_id = at.id
+       WHERE m.id = ?`
+    )
       .bind(matchId)
-      .first() as Promise<Record<string, unknown> | null>;
+      .first();
+    return result as Promise<Record<string, unknown> | null>;
   }
 
   async simulateQuickMatch(
@@ -559,6 +572,173 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
       }
     }
     return config;
+  }
+
+  async deleteMatch(leagueId: string, matchId: number): Promise<{ success: boolean; error?: string }> {
+    const match = await this.env.DB.prepare(
+      "SELECT id, home_team_id, away_team_id, home_score, away_score, status FROM matches WHERE id = ? AND league_id = ?"
+    )
+      .bind(matchId, leagueId)
+      .first<{ id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number; status: string }>();
+
+    if (!match) return { success: false, error: "Match not found" };
+
+    await this.env.DB.prepare(
+      "UPDATE fixtures SET match_id = NULL WHERE match_id = ? AND league_id = ?"
+    )
+      .bind(matchId, leagueId)
+      .run();
+
+    if (match.status === "played" && this.state) {
+      const season = this.state.season;
+      await this.reverseLeagueTable(match.home_team_id, match.away_team_id, match.home_score, match.away_score, leagueId, season);
+    }
+
+    await this.env.DB.prepare("DELETE FROM matches WHERE id = ?")
+      .bind(matchId)
+      .run();
+
+    return { success: true };
+  }
+
+  async resetFixture(leagueId: string, fixtureId: number): Promise<{ success: boolean; error?: string }> {
+    const fixture = await this.env.DB.prepare(
+      "SELECT id, match_id FROM fixtures WHERE id = ? AND league_id = ?"
+    )
+      .bind(fixtureId, leagueId)
+      .first<{ id: number; match_id: number | null }>();
+
+    if (!fixture) return { success: false, error: "Fixture not found" };
+
+    if (fixture.match_id) {
+      const match = await this.env.DB.prepare(
+        "SELECT home_team_id, away_team_id, home_score, away_score, status FROM matches WHERE id = ?"
+      )
+        .bind(fixture.match_id)
+        .first<{ home_team_id: number; away_team_id: number; home_score: number; away_score: number; status: string }>();
+
+      if (match?.status === "played" && this.state) {
+        await this.reverseLeagueTable(match.home_team_id, match.away_team_id, match.home_score, match.away_score, leagueId, this.state.season);
+      }
+
+      await this.env.DB.prepare("DELETE FROM matches WHERE id = ?")
+        .bind(fixture.match_id)
+        .run();
+    }
+
+    await this.env.DB.prepare(
+      "UPDATE fixtures SET match_id = NULL WHERE id = ?"
+    )
+      .bind(fixtureId)
+      .run();
+
+    return { success: true };
+  }
+
+  async bulkResetWeek(leagueId: string, week: number): Promise<{ success: boolean; resetCount?: number; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const fixtures = await this.env.DB.prepare(
+      "SELECT id, match_id FROM fixtures WHERE week = ? AND season = ? AND league_id = ?"
+    )
+      .bind(week, this.state.season, leagueId)
+      .all<{ id: number; match_id: number | null }>();
+
+    if (!fixtures.results?.length) {
+      return { success: false, error: "No fixtures found for this week" };
+    }
+
+    let resetCount = 0;
+    for (const fixture of fixtures.results) {
+      if (fixture.match_id) {
+        const match = await this.env.DB.prepare(
+          "SELECT home_team_id, away_team_id, home_score, away_score, status FROM matches WHERE id = ?"
+        )
+          .bind(fixture.match_id)
+          .first<{ home_team_id: number; away_team_id: number; home_score: number; away_score: number; status: string }>();
+
+        if (match?.status === "played" && this.state) {
+          await this.reverseLeagueTable(match.home_team_id, match.away_team_id, match.home_score, match.away_score, leagueId, this.state.season);
+        }
+
+        await this.env.DB.prepare("DELETE FROM matches WHERE id = ?")
+          .bind(fixture.match_id)
+          .run();
+      }
+
+      await this.env.DB.prepare(
+        "UPDATE fixtures SET match_id = NULL WHERE id = ?"
+      )
+        .bind(fixture.id)
+        .run();
+      resetCount++;
+    }
+
+    return { success: true, resetCount };
+  }
+
+  async bulkDeleteMatches(leagueId: string, matchIds: number[]): Promise<{ success: boolean; deletedCount?: number; error?: string }> {
+    if (!matchIds.length) return { success: false, error: "No match IDs provided" };
+
+    let deletedCount = 0;
+    for (const matchId of matchIds) {
+      const result = await this.deleteMatch(leagueId, matchId);
+      if (result.success) deletedCount++;
+    }
+
+    return { success: true, deletedCount };
+  }
+
+  async editMatchScore(leagueId: string, matchId: number, homeScore: number, awayScore: number): Promise<{ success: boolean; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const match = await this.env.DB.prepare(
+      "SELECT id, home_team_id, away_team_id, home_score, away_score, status, league_id FROM matches WHERE id = ?"
+    )
+      .bind(matchId)
+      .first<{ id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number; status: string; league_id: string }>();
+
+    if (!match) return { success: false, error: "Match not found" };
+    if (match.league_id !== leagueId) return { success: false, error: "Match not in this league" };
+    if (match.status !== "played") return { success: false, error: "Match has not been played yet" };
+
+    await this.reverseLeagueTable(match.home_team_id, match.away_team_id, match.home_score, match.away_score, leagueId, this.state.season);
+
+    await this.updateLeagueForMatch(match.home_team_id, match.away_team_id, homeScore, awayScore, leagueId);
+
+    await this.env.DB.prepare(
+      "UPDATE matches SET home_score = ?, away_score = ? WHERE id = ?"
+    )
+      .bind(homeScore, awayScore, matchId)
+      .run();
+
+    return { success: true };
+  }
+
+  async resetAllFixtures(leagueId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.state) throw new Error("League not initialized");
+
+    const matches = await this.env.DB.prepare(
+      "SELECT id, home_team_id, away_team_id, home_score, away_score, status FROM matches WHERE league_id = ?"
+    )
+      .bind(leagueId)
+      .all<{ id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number; status: string }>();
+
+    for (const match of (matches.results || [])) {
+      if (match.status === "played") {
+        await this.reverseLeagueTable(match.home_team_id, match.away_team_id, match.home_score, match.away_score, leagueId, this.state.season);
+      }
+    }
+
+    await this.env.DB.batch([
+      this.env.DB.prepare("DELETE FROM matches WHERE league_id = ?").bind(leagueId),
+      this.env.DB.prepare("UPDATE fixtures SET match_id = NULL WHERE league_id = ?").bind(leagueId),
+    ]);
+
+    this.state.currentWeek = 0;
+    this.saveState();
+
+    return { success: true };
   }
 
   async destroy(leagueId: string): Promise<{ success: boolean }> {
@@ -727,6 +907,50 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
         .run();
       await this.env.DB.prepare(
         "UPDATE league_table SET played = played + 1, drawn = drawn + 1, goals_for = goals_for + ?, goals_against = goals_against + ?, goal_difference = goal_difference + ?, points = points + 1 WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(awayGoals, homeGoals, 0, awayId, season, leagueId)
+        .run();
+    }
+  }
+
+  private async reverseLeagueTable(
+    homeId: number,
+    awayId: number,
+    homeGoals: number,
+    awayGoals: number,
+    leagueId: string,
+    season: number
+  ) {
+    if (homeGoals > awayGoals) {
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), won = MAX(won - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ?, points = MAX(points - 3, 0) WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(homeGoals, awayGoals, homeGoals - awayGoals, homeId, season, leagueId)
+        .run();
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), lost = MAX(lost - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ? WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(awayGoals, homeGoals, awayGoals - homeGoals, awayId, season, leagueId)
+        .run();
+    } else if (awayGoals > homeGoals) {
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), won = MAX(won - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ?, points = MAX(points - 3, 0) WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(awayGoals, homeGoals, awayGoals - homeGoals, awayId, season, leagueId)
+        .run();
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), lost = MAX(lost - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ? WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(homeGoals, awayGoals, homeGoals - awayGoals, homeId, season, leagueId)
+        .run();
+    } else {
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), drawn = MAX(drawn - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ?, points = MAX(points - 1, 0) WHERE team_id = ? AND season = ? AND league_id = ?"
+      )
+        .bind(homeGoals, awayGoals, 0, homeId, season, leagueId)
+        .run();
+      await this.env.DB.prepare(
+        "UPDATE league_table SET played = MAX(played - 1, 0), drawn = MAX(drawn - 1, 0), goals_for = MAX(goals_for - ?, 0), goals_against = MAX(goals_against - ?, 0), goal_difference = goal_difference - ?, points = MAX(points - 1, 0) WHERE team_id = ? AND season = ? AND league_id = ?"
       )
         .bind(awayGoals, homeGoals, 0, awayId, season, leagueId)
         .run();
