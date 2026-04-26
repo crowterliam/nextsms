@@ -78,12 +78,14 @@ CREATE TABLE IF NOT EXISTS league_invitations (
   league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
   league_name TEXT NOT NULL,
   league_slug TEXT NOT NULL,
-  invited_email TEXT NOT NULL,
+  invited_email TEXT NOT NULL DEFAULT '',
   invited_user_id TEXT REFERENCES "user"(id) ON DELETE CASCADE,
   inviter_user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   role TEXT NOT NULL DEFAULT 'member',
   team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+  type TEXT NOT NULL DEFAULT 'link',
   status TEXT NOT NULL DEFAULT 'pending',
+  expires_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

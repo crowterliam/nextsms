@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transfer Market link on league detail page
 - Manage links on league teams list page
 - League invitations: invite users by email, assign role and team on invite
+- Invite links: generate time-expiry invite links with configurable TTL (24h–30d), copy and share
+- Join page: accept or decline invite links at `/leagues/[slug]/join?token=...`
+- Email invitations disabled in UI until email service is implemented (API routes remain functional with TODO notes)
 - Invitation acceptance/rejection from the leagues dashboard
 - Members management page: view members, update roles, remove members, assign teams
 - Team manager assignment: assign any league member as a team manager from the members page

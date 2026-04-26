@@ -52,6 +52,36 @@ export async function POST(
   const body = await request.json();
   const action = body.action as string;
 
+  if (action === 'create_invite_link') {
+    const { role, team_id, ttl_hours } = body as { role?: string; team_id?: number; ttl_hours?: number };
+    const validRoles = ['member', 'admin'];
+    const inviteRole = validRoles.includes(role || '') ? role! : 'member';
+    const hours = typeof ttl_hours === 'number' && ttl_hours > 0 && ttl_hours <= 720 ? ttl_hours : 168;
+    const expiresAt = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+
+    const id = crypto.randomUUID();
+    await createInvitation(env.DB, {
+      id,
+      league_id: league.id,
+      league_name: league.name,
+      league_slug: league.league_slug,
+      invited_email: '',
+      invited_user_id: null,
+      inviter_user_id: user!.id,
+      role: inviteRole,
+      team_id: team_id && typeof team_id === 'number' && team_id > 0 ? team_id : null,
+      type: 'link',
+      expires_at: expiresAt,
+    });
+
+    const invitations = await getPendingInvitationsForLeague(env.DB, league.id);
+    return NextResponse.json({ success: true, token: id, expires_at: expiresAt, invitations: invitations.results });
+  }
+
+  // TODO: Email invitations are disabled in the UI until an email delivery service
+  // (Resend, SendGrid, Mailgun, etc.) is implemented. This action remains functional
+  // for when email sending is wired up. Enable the email invite form in the members
+  // page component once ready.
   if (action === 'invite') {
     const { email, role, team_id } = body as { email: string; role: string; team_id?: number };
     if (!email || typeof email !== 'string') {
@@ -68,6 +98,13 @@ export async function POST(
       return NextResponse.json({ error: 'User is already a member' }, { status: 409 });
     }
 
+    const existingInvite = await env.DB.prepare(
+      "SELECT id FROM league_invitations WHERE invited_email = ? AND league_id = ? AND status = 'pending'"
+    ).bind(normalizedEmail, league.id).first();
+    if (existingInvite) {
+      return NextResponse.json({ error: 'Invitation already pending for this email' }, { status: 409 });
+    }
+
     const targetUser = await env.DB.prepare('SELECT id FROM "user" WHERE email = ?').bind(normalizedEmail).first<{ id: string }>();
 
     const id = crypto.randomUUID();
@@ -81,6 +118,8 @@ export async function POST(
       inviter_user_id: user!.id,
       role: inviteRole,
       team_id: team_id && typeof team_id === 'number' && team_id > 0 ? team_id : null,
+      type: 'email',
+      expires_at: null,
     });
 
     const invitations = await getPendingInvitationsForLeague(env.DB, league.id);
@@ -91,6 +130,10 @@ export async function POST(
     const { invitation_id } = body as { invitation_id: string };
     if (!invitation_id || typeof invitation_id !== 'string') {
       return NextResponse.json({ error: 'invitation_id required' }, { status: 400 });
+    }
+    const inv = await env.DB.prepare('SELECT league_id FROM league_invitations WHERE id = ?').bind(invitation_id).first<{ league_id: string }>();
+    if (!inv || inv.league_id !== league.id) {
+      return NextResponse.json({ error: 'Invitation not found in this league' }, { status: 404 });
     }
     await updateInvitationStatus(env.DB, invitation_id, 'cancelled');
     const invitations = await getPendingInvitationsForLeague(env.DB, league.id);
@@ -129,6 +172,7 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot remove owner' }, { status: 403 });
     }
     await removeLeagueMember(env.DB, league.id, user_id);
+    await env.DB.prepare('UPDATE teams SET manager_user_id = NULL WHERE manager_user_id = ? AND league_id = ?').bind(user_id, league.id).run();
     const members = await getLeagueMembers(env.DB, league.id);
     return NextResponse.json({ success: true, members: members.results });
   }
@@ -138,9 +182,6 @@ export async function POST(
     if (!user_id || typeof user_id !== 'string') {
       return NextResponse.json({ error: 'user_id required' }, { status: 400 });
     }
-    const memberCheck = await env.DB.prepare('SELECT role FROM league_members WHERE league_id = ? AND user_id = ?')
-      .bind(league.id, user_id).first();
-    if (!memberCheck) return NextResponse.json({ error: 'Not a league member' }, { status: 400 });
 
     if (team_id !== null && (typeof team_id !== 'number' || team_id <= 0)) {
       return NextResponse.json({ error: 'Invalid team_id' }, { status: 400 });
@@ -151,6 +192,8 @@ export async function POST(
         return NextResponse.json({ error: 'Team not in this league' }, { status: 400 });
       }
     }
+
+    await addLeagueMember(env.DB, league.id, user_id, 'member');
 
     if (team_id === null) {
       await env.DB.prepare('UPDATE teams SET manager_user_id = NULL WHERE manager_user_id = ? AND league_id = ?').bind(user_id, league.id).run();

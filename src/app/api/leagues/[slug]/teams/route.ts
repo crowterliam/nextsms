@@ -81,6 +81,11 @@ export async function POST(
 
   const doStub = getLeagueDO(slug);
   const result = await doStub.addTeam(name, abbreviation, league.id, manager_user_id);
+  if (result.success && manager_user_id) {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO league_members (league_id, user_id, role) VALUES (?, ?, 'member')"
+    ).bind(league.id, manager_user_id).run();
+  }
   return NextResponse.json(result);
 }
 

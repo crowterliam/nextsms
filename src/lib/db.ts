@@ -392,10 +392,12 @@ export async function createInvitation(db: D1Database, data: {
   inviter_user_id: string;
   role: string;
   team_id: number | null;
+  type: string;
+  expires_at: string | null;
 }) {
   return db.prepare(
-    'INSERT INTO league_invitations (id, league_id, league_name, league_slug, invited_email, invited_user_id, inviter_user_id, role, team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(data.id, data.league_id, data.league_name, data.league_slug, data.invited_email, data.invited_user_id, data.inviter_user_id, data.role, data.team_id).run();
+    'INSERT INTO league_invitations (id, league_id, league_name, league_slug, invited_email, invited_user_id, inviter_user_id, role, team_id, type, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(data.id, data.league_id, data.league_name, data.league_slug, data.invited_email, data.invited_user_id, data.inviter_user_id, data.role, data.team_id, data.type, data.expires_at).run();
 }
 
 export async function getPendingInvitationsForUser(db: D1Database, userId: string, email: string) {
@@ -420,20 +422,24 @@ export async function updateInvitationStatus(db: D1Database, invitationId: strin
 
 export async function getLeagueMembers(db: D1Database, leagueId: string) {
   return db.prepare(
-    `SELECT lm.*, u.name, u.email, t.name as team_name, tm.id as managed_team_id, mt.name as managed_team_name
+    `SELECT lm.*, u.name, u.email, t.id as managed_team_id, t.name as managed_team_name
      FROM league_members lm
      JOIN "user" u ON lm.user_id = u.id
-     LEFT JOIN teams t ON t.manager_user_id = lm.user_id AND t.league_id = lm.league_id
-     LEFT JOIN teams tm ON tm.manager_user_id = lm.user_id AND tm.league_id = ?
+     LEFT JOIN teams t ON t.manager_user_id = lm.user_id AND t.league_id = ?
      WHERE lm.league_id = ?
      ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name`
   ).bind(leagueId, leagueId).all();
 }
 
 export async function addLeagueMember(db: D1Database, leagueId: string, userId: string, role: string) {
-  return db.prepare(
-    'INSERT OR IGNORE INTO league_members (league_id, user_id, role) VALUES (?, ?, ?)'
-  ).bind(leagueId, userId, role).run();
+  await db.prepare(
+    `INSERT INTO league_members (league_id, user_id, role) VALUES (?, ?, ?)
+     ON CONFLICT(league_id, user_id) DO UPDATE SET role = CASE
+       WHEN role = 'owner' THEN 'owner'
+       WHEN role = 'admin' AND ? = 'member' THEN 'admin'
+       ELSE ?
+     END`
+  ).bind(leagueId, userId, role, role, role).run();
 }
 
 export async function updateMemberRole(db: D1Database, leagueId: string, userId: string, role: string) {
