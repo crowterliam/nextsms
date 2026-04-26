@@ -19,6 +19,8 @@ export default function LeagueTeamsPage() {
   const [newName, setNewName] = useState('');
   const [newAbbr, setNewAbbr] = useState('');
   const [adding, setAdding] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [genCount, setGenCount] = useState(6);
 
   useEffect(() => {
     fetchTeams();
@@ -56,6 +58,27 @@ export default function LeagueTeamsPage() {
     setAdding(false);
   };
 
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/leagues/${slug}/teams`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate_placeholder', count: genCount }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fetchTeams();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to generate teams');
+      }
+    } catch {
+      alert('Failed to generate teams');
+    }
+    setGenerating(false);
+  };
+
   const handleDelete = async (teamId: number) => {
     if (!confirm('Delete this team and all its players?')) return;
     try {
@@ -77,12 +100,23 @@ export default function LeagueTeamsPage() {
       </div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Teams</h1>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark text-sm font-medium"
-        >
-          Add Team
-        </button>
+        <div className="flex items-center gap-2">
+          {teams.length < 2 && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 text-sm font-medium disabled:opacity-50"
+            >
+              {generating ? 'Generating...' : `Quick Generate ${genCount} Teams`}
+            </button>
+          )}
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark text-sm font-medium"
+          >
+            Add Team
+          </button>
+        </div>
       </div>
 
       {showAdd && (
@@ -109,7 +143,17 @@ export default function LeagueTeamsPage() {
       {loading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : teams.length === 0 ? (
-        <p className="text-muted-foreground text-center py-8">No teams yet. Add teams to get started.</p>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg mb-2">No teams yet</p>
+          <p className="text-sm text-muted-foreground mb-4">Add teams manually or use Quick Generate to get started fast.</p>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark text-sm font-medium disabled:opacity-50"
+          >
+            {generating ? 'Generating...' : `Generate ${genCount} Placeholder Teams`}
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teams.map((team) => (

@@ -28,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "League not found" }, { status: 404 });
   }
 
-  const { error: memberError } = await requireLeagueMember(
+  const { error: memberError, role } = await requireLeagueMember(
     request,
     league.id,
     user!.id
@@ -39,9 +39,20 @@ export async function GET(
   const state = await doStub.getState();
   const teams = await doStub.getTeams(league.id);
 
+  const teamsWithoutManagers = await env.DB.prepare(
+    "SELECT id, name FROM teams WHERE league_id = ? AND manager_user_id IS NULL"
+  )
+    .bind(league.id)
+    .all();
+
   return NextResponse.json({
     ...league,
+    status: state?.status ?? league.status,
+    season: state?.season ?? league.season,
+    current_week: state?.currentWeek ?? league.current_week,
     doState: state,
     teamCount: teams.length,
+    userRole: role,
+    teamsWithoutManagers: teamsWithoutManagers.results,
   });
 }

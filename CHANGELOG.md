@@ -5,7 +5,24 @@ All notable changes to NextSMS are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
-## [Unreleased]
+## [1.2.0] - 2026-04-26
+
+### Added
+
+- Setup checklist on league dashboard for admins: shows progress toward activating the league (teams, managers, fixtures) with quick-action links
+- Warning banner on active league dashboard when teams lack assigned managers
+- Team detail API returns `canManage` and `userRole` for client-side permission gating
+- League detail API returns `userRole` and `teamsWithoutManagers` for admin notice board
+- League list API syncs stale D1 status with canonical DO status
+- Generate placeholder teams: bulk-create up to 20 teams with auto-generated names and full rosters via `POST /api/leagues/[slug]/teams` with `action: 'generate_placeholder'`
+- Quick-generate button on teams page and setup checklist for fast league setup
+
+### Fixed
+
+- Fixed "No SQL statements detected" error when PUTting empty config to `/api/leagues/[slug]/config`
+- Fixed D1/DO status desync: league status in D1 now updates to "active" when fixtures are generated
+- Fixed league detail page using stale D1 status instead of canonical DO status
+- Fixed team detail page showing write-action buttons (Settings, Transfer, Add Tactic, Generate Lineup) to non-managers — now gated by `canManage` permission
 
 ## [1.1.0] - 2026-04-26
 

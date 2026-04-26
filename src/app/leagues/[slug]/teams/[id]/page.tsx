@@ -12,6 +12,7 @@ interface TeamData {
   default_formation: string;
   default_tactic: string;
   default_aggression: number;
+  manager_user_id?: string;
 }
 
 interface Player {
@@ -84,6 +85,8 @@ export default function TeamDetailPage() {
   const [lineups, setLineups] = useState<SavedLineup[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('squad');
   const [loading, setLoading] = useState(true);
+  const [canManage, setCanManage] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -114,6 +117,8 @@ export default function TeamDetailPage() {
         setPlayers(data.players || []);
         setTactics(data.tactics || []);
         setLineups(data.lineups || []);
+        setCanManage(data.canManage ?? false);
+        setUserRole(data.userRole ?? null);
         setEditFormation(data.team.default_formation || '442');
         setEditTactic(data.team.default_tactic || 'N');
         setEditAggression(data.team.default_aggression || 50);
@@ -259,15 +264,17 @@ export default function TeamDetailPage() {
             <span>Default: {team.default_formation}{team.default_tactic}</span>
           </div>
         </div>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="px-3 py-2 border border-border rounded-lg text-sm hover:bg-card transition-colors"
-        >
-          Settings
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="px-3 py-2 border border-border rounded-lg text-sm hover:bg-card transition-colors"
+          >
+            Settings
+          </button>
+        )}
       </div>
 
-      {showSettings && (
+      {canManage && showSettings && (
         <div className="mb-6 p-5 border border-border rounded-lg bg-card">
           <h3 className="font-semibold mb-3">Team Settings</h3>
           <div className="flex flex-wrap gap-4 items-end">
@@ -315,7 +322,7 @@ export default function TeamDetailPage() {
 
       {activeTab === 'squad' && (
         <div>
-          {transferPlayerId && (
+          {canManage && transferPlayerId && (
             <div className="mb-4 p-4 border border-primary/30 rounded-lg bg-primary/5 flex items-end gap-3">
               <span className="text-sm">List <strong>{players.find(p => p.id === transferPlayerId)?.name}</strong> for:</span>
               <input type="number" value={askingPrice} onChange={e => setAskingPrice(e.target.value)}
@@ -347,8 +354,10 @@ export default function TeamDetailPage() {
                       <th className="px-2 py-2.5 text-center font-medium cursor-pointer hover:text-foreground" onClick={() => toggleSort('goals')}>Gls</th>
                       <th className="px-2 py-2.5 text-center font-medium cursor-pointer hover:text-foreground" onClick={() => toggleSort('assists')}>Ast</th>
                       <th className="px-2 py-2.5 text-center font-medium cursor-pointer hover:text-foreground" onClick={() => toggleSort('games')}>Gam</th>
-                      <th className="px-2 py-2.5 text-center font-medium">Status</th>
-                      <th className="px-2 py-2.5 text-center font-medium">Action</th>
+                        <th className="px-2 py-2.5 text-center font-medium">Status</th>
+                        {canManage && (
+                          <th className="px-2 py-2.5 text-center font-medium">Action</th>
+                        )}
                     </tr>
                   </thead>
                   <tbody>
@@ -390,16 +399,18 @@ export default function TeamDetailPage() {
                             <span className="text-muted-foreground/50">-</span>
                           )}
                         </td>
-                        <td className="px-2 py-2 text-center">
-                          {p.injury === 0 && p.suspension === 0 && (
-                            <button
-                              onClick={() => { setTransferPlayerId(p.id); setAskingPrice(''); }}
-                              className="text-xs text-primary hover:text-primary-dark transition-colors"
-                            >
-                              Transfer
-                            </button>
-                          )}
-                        </td>
+                        {canManage && (
+                          <td className="px-2 py-2 text-center">
+                            {p.injury === 0 && p.suspension === 0 && (
+                              <button
+                                onClick={() => { setTransferPlayerId(p.id); setAskingPrice(''); }}
+                                className="text-xs text-primary hover:text-primary-dark transition-colors"
+                              >
+                                Transfer
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -414,13 +425,15 @@ export default function TeamDetailPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Tactics</h2>
-            <button onClick={() => setShowTacticForm(!showTacticForm)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
-              {showTacticForm ? 'Cancel' : 'Add Tactic'}
-            </button>
+            {canManage && (
+              <button onClick={() => setShowTacticForm(!showTacticForm)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
+                {showTacticForm ? 'Cancel' : 'Add Tactic'}
+              </button>
+            )}
           </div>
 
-          {showTacticForm && (
+          {canManage && showTacticForm && (
             <div className="mb-4 p-4 border border-border rounded-lg bg-card">
               <div className="flex flex-wrap gap-4 items-end">
                 <div>
@@ -461,9 +474,11 @@ export default function TeamDetailPage() {
                   </p>
                   <p className="text-sm text-muted-foreground">Aggression: {t.aggression}</p>
                   <div className="mt-3 flex items-center gap-2">
-                    <button onClick={() => { setNewTacticCode(t.tactic_code); setNewFormation(t.formation); setNewAggression(t.aggression); setShowTacticForm(true); }}
-                      className="text-xs text-primary hover:text-primary-dark">Edit</button>
-                    {!t.is_default && (
+                    {canManage && (
+                      <button onClick={() => { setNewTacticCode(t.tactic_code); setNewFormation(t.formation); setNewAggression(t.aggression); setShowTacticForm(true); }}
+                        className="text-xs text-primary hover:text-primary-dark">Edit</button>
+                    )}
+                    {canManage && !t.is_default && (
                       <button onClick={() => deleteTactic(t.id)} className="text-xs text-destructive hover:text-destructive-dark">Delete</button>
                     )}
                   </div>
@@ -500,13 +515,15 @@ export default function TeamDetailPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Saved Lineups</h2>
-            <button onClick={() => setShowLineupGen(!showLineupGen)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
-              {showLineupGen ? 'Cancel' : 'Generate Lineup'}
-            </button>
+            {canManage && (
+              <button onClick={() => setShowLineupGen(!showLineupGen)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
+                {showLineupGen ? 'Cancel' : 'Generate Lineup'}
+              </button>
+            )}
           </div>
 
-          {showLineupGen && (
+          {canManage && showLineupGen && (
             <div className="mb-4 p-4 border border-border rounded-lg bg-card">
               <h3 className="font-semibold mb-3">Auto-Generate Lineup</h3>
               <div className="flex flex-wrap gap-4 items-end">
@@ -556,16 +573,19 @@ export default function TeamDetailPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {lu.is_active ? (
+                        {canManage && lu.is_active && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Active</span>
-                        ) : (
+                        )}
+                        {canManage && !lu.is_active && (
                           <button onClick={() => activateLineup(lu.id)}
                             className="text-xs px-3 py-1 border border-primary text-primary rounded-lg hover:bg-primary/10">
                             Activate
                           </button>
                         )}
-                        <button onClick={() => deleteLineup(lu.id)}
-                          className="text-xs text-destructive hover:text-destructive-dark">Delete</button>
+                        {canManage && (
+                          <button onClick={() => deleteLineup(lu.id)}
+                            className="text-xs text-destructive hover:text-destructive-dark">Delete</button>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-1">

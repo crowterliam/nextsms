@@ -215,6 +215,12 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     this.state.currentWeek = 0;
     this.saveState();
 
+    await this.env.DB.prepare(
+      "UPDATE leagues SET status = 'active' WHERE id = ?"
+    )
+      .bind(leagueId)
+      .run();
+
     return {
       success: true,
       rounds: rounds.length,
@@ -523,10 +529,12 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
     leagueId: string,
     settings: Record<string, string>
   ): Promise<{ success: boolean }> {
+    const entries = Object.entries(settings);
+    if (entries.length === 0) return { success: true };
     const stmt = this.env.DB.prepare(
       "INSERT OR REPLACE INTO league_config (key, value, league_id) VALUES (?, ?, ?)"
     );
-    const batch = Object.entries(settings).map(([k, v]) =>
+    const batch = entries.map(([k, v]) =>
       stmt.bind(k, v, leagueId)
     );
     await this.env.DB.batch(batch);

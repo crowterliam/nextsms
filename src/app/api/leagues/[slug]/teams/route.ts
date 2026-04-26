@@ -6,6 +6,14 @@ import {
   requireLeagueAdmin,
 } from "@/lib/auth-helpers";
 
+const PLACEHOLDER_TEAM_NAMES = [
+  "Red Lions", "Blue Eagles", "Green Dragons", "Golden Hawks",
+  "Silver Wolves", "Black Panthers", "White Tigers", "Crimson Bears",
+  "Azure Foxes", "Emerald Sharks", "Amber Falcons", "Slate Vipers",
+  "Ivory Rhinos", "Scarlet Ravens", "Teal Cobras", "Jade Stallions",
+  "Bronze Owls", "Onyx Lynx", "Pearl Bison", "Copper Jaguars",
+];
+
 export const runtime = "edge";
 
 export async function GET(
@@ -66,6 +74,53 @@ export async function POST(
   if (adminError) return adminError;
 
   const body = await request.json();
+
+  if (body.action === "generate_placeholder") {
+    const count = typeof body.count === "number" && body.count > 0 && body.count <= 20
+      ? body.count
+      : 6;
+
+    const existingTeams = await env.DB.prepare(
+      "SELECT name, abbreviation FROM teams WHERE league_id = ?"
+    )
+      .bind(league.id)
+      .all<{ name: string; abbreviation: string }>();
+
+    const usedNames = new Set((existingTeams.results || []).map((t) => t.name));
+    const usedAbbrs = new Set((existingTeams.results || []).map((t) => t.abbreviation));
+
+    const available = PLACEHOLDER_TEAM_NAMES.filter((n) => !usedNames.has(n));
+    const toCreate = available.slice(0, count);
+
+    if (toCreate.length === 0) {
+      return NextResponse.json(
+        { error: "No more placeholder team names available" },
+        { status: 400 }
+      );
+    }
+
+    const doStub = getLeagueDO(slug);
+    const created: Array<{ name: string; abbreviation: string }> = [];
+
+    for (const teamName of toCreate) {
+      let abbr = teamName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 3);
+      let suffix = 0;
+      let finalAbbr = abbr;
+      while (usedAbbrs.has(finalAbbr)) {
+        suffix++;
+        finalAbbr = abbr + suffix;
+      }
+      usedAbbrs.add(finalAbbr);
+
+      const result = await doStub.addTeam(teamName, finalAbbr, league.id);
+      if (result.success && result.team) {
+        created.push({ name: result.team.name, abbreviation: result.team.abbreviation });
+      }
+    }
+
+    return NextResponse.json({ success: true, created, count: created.length });
+  }
+
   const { name, abbreviation, manager_user_id } = body as {
     name: string;
     abbreviation: string;

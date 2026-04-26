@@ -23,11 +23,14 @@ export async function GET(
   const league = await env.DB.prepare('SELECT id FROM leagues WHERE slug = ?').bind(slug).first<{ id: string }>();
   if (!league) return NextResponse.json({ error: 'League not found' }, { status: 404 });
 
-  const { error: memberError } = await requireLeagueMember(request, league.id, user!.id);
+  const { error: memberError, role } = await requireLeagueMember(request, league.id, user!.id);
   if (memberError) return memberError;
 
   const team = await getTeam(env.DB, teamId);
   if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+
+  const canManage = role === 'owner' || role === 'admin' ||
+    ((team as Record<string, unknown>).manager_user_id === user!.id);
 
   const players = await getPlayers(env.DB, teamId);
   const tactics = await getTeamTactics(env.DB, teamId);
@@ -40,6 +43,8 @@ export async function GET(
     tactics: tactics.results,
     lineups: lineups.results,
     activeLineup,
+    userRole: role,
+    canManage,
   });
 }
 

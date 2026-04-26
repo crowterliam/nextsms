@@ -23,7 +23,28 @@ export async function GET(request: Request) {
     .bind(user!.id)
     .all();
 
-  return NextResponse.json(result.results);
+  const leagues = result.results as Array<Record<string, unknown>>;
+  const synced = await Promise.all(
+    leagues.map(async (league) => {
+      if (league.status === "setup" && league.slug) {
+        try {
+          const doStub = getLeagueDO(league.slug as string);
+          const state = await doStub.getState();
+          if (state && state.status !== "setup") {
+            return {
+              ...league,
+              status: state.status,
+              season: state.season,
+              current_week: state.currentWeek,
+            };
+          }
+        } catch {}
+      }
+      return league;
+    })
+  );
+
+  return NextResponse.json(synced);
 }
 
 export async function POST(request: Request) {
