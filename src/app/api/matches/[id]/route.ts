@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
 import { getMatch } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
 export const runtime = 'edge';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const env = getEnv();

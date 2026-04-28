@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 export default function LeagueFixturesPage() {
   const params = useParams();
@@ -46,7 +47,7 @@ export default function LeagueFixturesPage() {
     if (!confirm('This will replace all existing fixtures and reset all results. Continue?')) return;
     setGenerating(true);
     try {
-      const res = await fetch(`/api/leagues/${slug}/fixtures`, { method: 'POST' });
+      const res = await safeFetch(`/api/leagues/${slug}/fixtures`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         alert(`Generated ${data.matches} matches across ${data.rounds} rounds`);
@@ -63,7 +64,7 @@ export default function LeagueFixturesPage() {
   const advanceWeek = async () => {
     setAdvancing(true);
     try {
-      const res = await fetch(`/api/leagues/${slug}/advance`, { method: 'POST' });
+      const res = await safeFetch(`/api/leagues/${slug}/advance`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         alert(`Week ${data.week}: ${data.results?.length || 0} matches played`);
@@ -81,7 +82,7 @@ export default function LeagueFixturesPage() {
     if (!confirm(`Are you sure you want to ${action.replace(/_/g, ' ')}?`)) return;
     setAdminAction(action);
     try {
-      const res = await fetch(`/api/leagues/${slug}/admin`, {
+      const res = await safeFetch(`/api/leagues/${slug}/admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...payload }),

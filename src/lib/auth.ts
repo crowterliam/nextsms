@@ -23,6 +23,13 @@ export function createAuth() {
         maxAge: 5 * 60,
       },
     },
+    advanced: {
+      cookieOptions: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+      },
+    },
     appName: "NSMS",
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

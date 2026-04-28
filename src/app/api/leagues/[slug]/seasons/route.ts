@@ -43,7 +43,7 @@ export async function POST(
   const { error: adminError } = await requireLeagueAdmin(request, league.id, user!.id);
   if (adminError) return adminError;
 
-  const body = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const name = typeof body.name === "string" ? body.name.trim() : undefined;
 
   const doStub = getLeagueDO(slug);

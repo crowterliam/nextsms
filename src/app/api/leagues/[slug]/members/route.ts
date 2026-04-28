@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth, requireLeagueMember, requireLeagueAdmin } from '@/lib/auth-helpers';
+import { requireAuth, requireLeagueMember, requireLeagueAdmin, parseJsonBody } from '@/lib/auth-helpers';
 import {
   getLeagueMembers, addLeagueMember, updateMemberRole, removeLeagueMember,
   createInvitation, getPendingInvitationsForLeague, updateInvitationStatus,
@@ -49,7 +49,7 @@ export async function POST(
   const { error: adminError } = await requireLeagueAdmin(request, league.id, user!.id);
   if (adminError) return adminError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const action = body.action as string;
 
   if (action === 'create_invite_link') {

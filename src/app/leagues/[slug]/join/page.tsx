@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/auth-client';
+import { safeFetch } from '@/lib/fetch';
 
 export default function JoinLeaguePage() {
   const params = useParams();
@@ -54,7 +55,7 @@ export default function JoinLeaguePage() {
   const handleAccept = async () => {
     setJoining(true);
     try {
-      const res = await fetch('/api/invitations', {
+      const res = await safeFetch('/api/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invitation_id: token, action: 'accept' }),
@@ -98,11 +99,11 @@ export default function JoinLeaguePage() {
           <>
             <p className="text-muted-foreground mb-4">Sign in to accept this invitation.</p>
             <div className="flex gap-3 justify-center">
-              <Link href={`/login?redirect=/leagues/${slug}/join?token=${token}`}
+              <Link href={`/login?redirect=${encodeURIComponent(`/leagues/${slug}/join?token=${encodeURIComponent(token || '')}`)}`}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg">
                 Sign In
               </Link>
-              <Link href={`/register?redirect=/leagues/${slug}/join?token=${token}`}
+              <Link href={`/register?redirect=${encodeURIComponent(`/leagues/${slug}/join?token=${encodeURIComponent(token || '')}`)}`}
                 className="px-4 py-2 border border-border rounded-lg">
                 Register
               </Link>

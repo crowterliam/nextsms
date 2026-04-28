@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Division {
   id: number;
@@ -84,7 +85,7 @@ export default function DivisionsPage() {
 
   const handleRemoveTeam = async (divisionId: number, teamId: number) => {
     try {
-      await fetch(`/api/leagues/${slug}/seasons/${seasonId}/divisions`, {
+      await safeFetch(`/api/leagues/${slug}/seasons/${seasonId}/divisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'remove_team', division_id: divisionId, team_id: teamId }),

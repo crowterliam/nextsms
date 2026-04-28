@@ -100,3 +100,11 @@ export async function requireTeamManager(
 
   return { error: null, role };
 }
+
+export async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
+  try {
+    return await request.json() as Record<string, unknown>;
+  } catch {
+    throw new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
+  }
+}

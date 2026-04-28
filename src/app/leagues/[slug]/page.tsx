@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface TeamWithoutManager {
   id: number;
@@ -74,7 +75,7 @@ export default function LeagueDetailPage() {
   const handleCreateSeason = async () => {
     setCreatingSeason(true);
     try {
-      const res = await fetch(`/api/leagues/${slug}/seasons`, { method: 'POST' });
+      const res = await safeFetch(`/api/leagues/${slug}/seasons`, { method: 'POST' });
       if (res.ok) {
         fetchLeague();
       } else {

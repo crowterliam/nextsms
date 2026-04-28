@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { requireAuth, getLeagueDO, requireLeagueAdmin, requireLeagueMember } from "@/lib/auth-helpers";
+import { requireAuth, getLeagueDO, requireLeagueAdmin, requireLeagueMember, parseJsonBody } from "@/lib/auth-helpers";
 
 export const runtime = "edge";
 
@@ -52,12 +52,13 @@ export async function POST(
   const { error: adminError } = await requireLeagueAdmin(request, league.id, user!.id);
   if (adminError) return adminError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const doStub = getLeagueDO(slug);
 
   if (body.action === "create") {
     const { name, type, format, season_id, division_id, settings } = body;
     if (!name || typeof name !== "string") return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    if (name.length > 100) return NextResponse.json({ error: "Name must be 100 characters or less" }, { status: 400 });
     if (!type || typeof type !== "string") return NextResponse.json({ error: "Type is required" }, { status: 400 });
     if (!format || typeof format !== "string") return NextResponse.json({ error: "Format is required" }, { status: 400 });
     if (typeof season_id !== "number") return NextResponse.json({ error: "season_id is required" }, { status: 400 });

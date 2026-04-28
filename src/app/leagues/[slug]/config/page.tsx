@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { LeagueConfig } from '@/lib/types';
 import { DEFAULT_CONFIG } from '@/lib/types';
+import { safeFetch } from '@/lib/fetch';
 
 interface ConfigSection {
   title: string;
@@ -292,7 +293,7 @@ export default function LeagueConfigPage() {
     setSaving(true);
     setSaved(false);
     try {
-      const res = await fetch(`/api/leagues/${slug}/config`, {
+      const res = await safeFetch(`/api/leagues/${slug}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(configRecord),

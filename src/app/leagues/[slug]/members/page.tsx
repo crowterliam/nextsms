@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/auth-client';
+import { safeFetch } from '@/lib/fetch';
 
 interface Member {
   user_id: string;
@@ -167,7 +168,7 @@ export default function MembersPage() {
 
   const removeMember = async (userId: string) => {
     if (!confirm('Remove this member from the league?')) return;
-    await fetch(`/api/leagues/${slug}/members`, {
+    await safeFetch(`/api/leagues/${slug}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'remove_member', user_id: userId }),

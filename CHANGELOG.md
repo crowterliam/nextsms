@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Full security audit conducted across all 36 API routes, middleware, auth, and client components (30 findings)
+- Middleware now enforces default-deny authentication: unauthenticated requests to non-public routes return 401 (API) or redirect to login (pages)
+- CSRF protection added via `X-Requested-With` header requirement on all state-changing requests (POST/PUT/PATCH/DELETE)
+- `safeFetch` utility added for client-side mutation calls — all 54 mutation fetch calls across 18 page components updated
+- Content-Security-Policy tightened: removed `unsafe-eval` from `script-src` directive
+- Authentication added to 6 previously unauthenticated legacy GET endpoints (league, teams, fixtures, matches)
+- Tactic code allowlist validation added to lineups route — prevents arbitrary data insertion (matches existing tactics route validation)
+- Aggression bounds validation added to lineup update action (0–100, integers only)
+- All truthy checks on numeric IDs replaced with strict `typeof === 'number' && > 0` validation
+- `league_id` removed from `TEAM_SETTINGS_COLUMNS` allowlist in db.ts to prevent unauthorized column writes
+- Cookie security attributes explicitly configured in better-auth (`httpOnly`, `sameSite: 'lax'`)
+- Import filename sanitized to strip path traversal characters from team abbreviation
+- Invite tokens properly encoded with `encodeURIComponent` in join page URL construction
+- String length limits added: team name (100), abbreviation (10), league name (100), slug (2–50), competition name (100), division name (100)
+- Positive integer validation on division operations (assign_team, remove_team, delete)
+- `parseJsonBody` helper added to standardize JSON parsing with proper 400 error responses across all API routes
+- `parseInt` NaN guards added for season ID URL parameters in divisions and season detail routes
+- Aggression validation now enforces integer values (rejects floats like 3.5)
+- Duplicate local `requireLeagueMember` function in teams route replaced with shared import from auth-helpers
+
+### Fixed
+
+- Unscoped mass UPDATEs in legacy season route now scope to teams with players (prevents cross-league data modification)
+- `activateLineup` in db.ts now uses `db.batch()` for atomic deactivation + activation (prevents race conditions)
+- Team deletion in LeagueDO now uses `db.batch()` for atomic player + team deletion (prevents orphaned records)
+
 ### Added
 
 - Manual lineup editing: change formation, tactic, aggression, and swap individual players from starting XI and substitutes via dropdown selectors

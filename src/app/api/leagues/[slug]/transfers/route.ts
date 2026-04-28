@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth, requireLeagueMember, requireTeamManager } from '@/lib/auth-helpers';
+import { requireAuth, requireLeagueMember, requireTeamManager, parseJsonBody } from '@/lib/auth-helpers';
 import {
   getActiveTransferListings, createTransferListing, withdrawTransferListing,
   getTransferListing, createTransferOffer, getTransferOffers, getIncomingTransferOffers,
@@ -65,8 +65,7 @@ export async function POST(
   const { error: memberError } = await requireLeagueMember(request, league.id, user!.id);
   if (memberError) return memberError;
 
-  const body = await request.json();
-
+  const body = await parseJsonBody(request);
   if (body.action === 'list') {
     const { player_id, team_id, asking_price } = body as { player_id: number; team_id: number; asking_price: number };
     if (typeof player_id !== 'number' || player_id <= 0 || typeof team_id !== 'number' || team_id <= 0) return NextResponse.json({ error: 'player_id and team_id required' }, { status: 400 });
@@ -104,7 +103,7 @@ export async function POST(
     const { listing_id, from_team_id, to_team_id, player_id, amount } = body as {
       listing_id: number; from_team_id: number; to_team_id: number; player_id: number; amount: number;
     };
-    if (!listing_id || !from_team_id || !to_team_id || !player_id) {
+    if (typeof listing_id !== 'number' || listing_id <= 0 || typeof from_team_id !== 'number' || from_team_id <= 0 || typeof to_team_id !== 'number' || to_team_id <= 0 || typeof player_id !== 'number' || player_id <= 0) {
       return NextResponse.json({ error: 'All fields required' }, { status: 400 });
     }
 

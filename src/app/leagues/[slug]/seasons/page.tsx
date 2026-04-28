@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Season {
   id: number;
@@ -42,7 +43,7 @@ export default function SeasonsPage() {
   const handleCreate = async () => {
     setCreating(true);
     try {
-      const res = await fetch(`/api/leagues/${slug}/seasons`, {
+      const res = await safeFetch(`/api/leagues/${slug}/seasons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName || undefined }),

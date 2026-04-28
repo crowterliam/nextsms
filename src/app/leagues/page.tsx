@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
+import { safeFetch } from '@/lib/fetch';
 
 interface League {
   id: string;
@@ -77,7 +78,7 @@ export default function LeaguesPage() {
   const handleDelete = async (leagueId: string) => {
     if (!confirm('Delete this league and all its data?')) return;
     try {
-      await fetch('/api/leagues', {
+      await safeFetch('/api/leagues', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leagueId }),
@@ -181,7 +182,7 @@ export default function LeaguesPage() {
                 <p className="text-sm text-muted-foreground mb-1">Role: <span className="capitalize">{inv.role}</span></p>
                 <div className="flex gap-2 mt-3">
                   <button onClick={async () => {
-                    await fetch('/api/invitations', {
+                    await safeFetch('/api/invitations', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ invitation_id: inv.id, action: 'accept' }),
@@ -192,7 +193,7 @@ export default function LeaguesPage() {
                     Accept
                   </button>
                   <button onClick={async () => {
-                    await fetch('/api/invitations', {
+                    await safeFetch('/api/invitations', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ invitation_id: inv.id, action: 'reject' }),

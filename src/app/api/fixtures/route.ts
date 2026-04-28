@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
 import { getFixtures, createFixtures, deleteFixtures, getTeams } from '@/lib/db';
 import { generateFixtures } from '@/lib/fixtures';
-import { requireAuth } from '@/lib/auth-helpers';
+import { requireAuth, parseJsonBody } from '@/lib/auth-helpers';
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { error: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   const env = getEnv();
   const result = await getFixtures(env.DB, 1);
   return NextResponse.json(result.results);
@@ -17,7 +20,7 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const env = getEnv();
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const season = body.season || 1;
 
   await deleteFixtures(env.DB, season);

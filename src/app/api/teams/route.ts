@@ -12,7 +12,10 @@ interface TeamRow {
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { error: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   const env = getEnv();
   const result = await env.DB.prepare('SELECT * FROM teams ORDER BY name').all();
   return NextResponse.json(result.results);

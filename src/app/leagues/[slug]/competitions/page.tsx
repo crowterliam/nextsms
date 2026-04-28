@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Competition {
   id: number;
@@ -142,7 +143,7 @@ export default function CompetitionsPage() {
 
   const handleAdvanceWeek = async (compId: number) => {
     try {
-      const res = await fetch(`/api/leagues/${slug}/competitions`, {
+      const res = await safeFetch(`/api/leagues/${slug}/competitions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'advance_week', competition_id: compId }),

@@ -21,7 +21,9 @@ export async function GET(
   if (memberError) return memberError;
 
   const doStub = getLeagueDO(slug);
-  const history = await doStub.getSeasonHistory(league.id, parseInt(seasonId));
+  const sid = parseInt(seasonId, 10);
+  if (isNaN(sid)) return NextResponse.json({ error: "Invalid season ID" }, { status: 400 });
+  const history = await doStub.getSeasonHistory(league.id, sid);
 
   return NextResponse.json({ history });
 }
@@ -42,7 +44,7 @@ export async function POST(
   const { error: adminError } = await requireLeagueAdmin(request, league.id, user!.id);
   if (adminError) return adminError;
 
-  const body = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const doStub = getLeagueDO(slug);
 
   if (body.action === "complete") {

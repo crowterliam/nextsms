@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { requireAuth, getLeagueDO, requireLeagueMember } from "@/lib/auth-helpers";
+import { requireAuth, getLeagueDO, requireLeagueMember, parseJsonBody } from "@/lib/auth-helpers";
 
 export const runtime = "edge";
 
@@ -30,14 +30,14 @@ export async function POST(
   );
   if (memberError) return memberError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { home_team_id, away_team_id, seed } = body as {
     home_team_id: number;
     away_team_id: number;
     seed?: number;
   };
 
-  if (!home_team_id || !away_team_id) {
+  if (typeof home_team_id !== 'number' || home_team_id <= 0 || typeof away_team_id !== 'number' || away_team_id <= 0) {
     return NextResponse.json(
       { error: "home_team_id and away_team_id required" },
       { status: 400 }

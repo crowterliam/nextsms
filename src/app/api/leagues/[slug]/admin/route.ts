@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { requireAuth, getLeagueDO, requireLeagueAdmin } from "@/lib/auth-helpers";
+import { requireAuth, getLeagueDO, requireLeagueAdmin, parseJsonBody } from "@/lib/auth-helpers";
 
 export const runtime = "edge";
 
@@ -30,7 +30,7 @@ export async function POST(
   );
   if (adminError) return adminError;
 
-  const body = (await request.json()) as {
+  const body = (await parseJsonBody(request)) as {
     action: string;
     fixture_id?: number;
     week?: number;

@@ -10,6 +10,7 @@ import {
   StatsTable,
 } from '@/components/match-report';
 import type { MatchEventDisplay, PlayerStats, LineupPlayer } from '@/components/match-report';
+import { safeFetch } from '@/lib/fetch';
 
 interface Team {
   id: number;
@@ -59,7 +60,7 @@ export default function LeagueSimulatePage() {
     setSimulating(true);
     setResult(null);
     try {
-      const res = await fetch(`/api/leagues/${slug}/simulate`, {
+      const res = await safeFetch(`/api/leagues/${slug}/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ home_team_id: parseInt(homeId), away_team_id: parseInt(awayId) }),

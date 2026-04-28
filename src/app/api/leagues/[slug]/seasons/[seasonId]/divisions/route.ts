@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { requireAuth, getLeagueDO, requireLeagueAdmin, requireLeagueMember } from "@/lib/auth-helpers";
+import { requireAuth, getLeagueDO, requireLeagueAdmin, requireLeagueMember, parseJsonBody } from "@/lib/auth-helpers";
 
 export const runtime = "edge";
 
@@ -21,7 +21,8 @@ export async function GET(
   if (memberError) return memberError;
 
   const doStub = getLeagueDO(slug);
-  const sid = parseInt(seasonId);
+  const sid = parseInt(seasonId, 10);
+  if (isNaN(sid)) return NextResponse.json({ error: "Invalid season ID" }, { status: 400 });
   const divisions = await doStub.getDivisions(league.id, sid);
 
   const divisionsWithTeams = await Promise.all(
@@ -50,13 +51,14 @@ export async function POST(
   const { error: adminError } = await requireLeagueAdmin(request, league.id, user!.id);
   if (adminError) return adminError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const doStub = getLeagueDO(slug);
-  const sid = parseInt(seasonId);
+  const sid = parseInt(seasonId, 10);
+  if (isNaN(sid)) return NextResponse.json({ error: "Invalid season ID" }, { status: 400 });
 
   if (body.action === "create") {
     const { name, level, promotion_spots, relegation_spots, playoff_spots } = body;
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100) {
       return NextResponse.json({ error: "Division name is required" }, { status: 400 });
     }
     if (typeof level !== "number" || level < 1) {
@@ -72,7 +74,7 @@ export async function POST(
 
   if (body.action === "assign_team") {
     const { division_id, team_id } = body;
-    if (typeof division_id !== "number" || typeof team_id !== "number") {
+    if (typeof division_id !== "number" || division_id <= 0 || typeof team_id !== "number" || team_id <= 0) {
       return NextResponse.json({ error: "division_id and team_id required" }, { status: 400 });
     }
     const result = await doStub.assignTeamToDivision(division_id, team_id, sid);
@@ -82,7 +84,7 @@ export async function POST(
 
   if (body.action === "remove_team") {
     const { division_id, team_id } = body;
-    if (typeof division_id !== "number" || typeof team_id !== "number") {
+    if (typeof division_id !== "number" || division_id <= 0 || typeof team_id !== "number" || team_id <= 0) {
       return NextResponse.json({ error: "division_id and team_id required" }, { status: 400 });
     }
     await doStub.removeTeamFromDivision(division_id, team_id);
@@ -97,7 +99,7 @@ export async function POST(
 
   if (body.action === "delete") {
     const { division_id } = body;
-    if (typeof division_id !== "number") {
+    if (typeof division_id !== "number" || division_id <= 0) {
       return NextResponse.json({ error: "division_id required" }, { status: 400 });
     }
     await doStub.deleteDivision(division_id);

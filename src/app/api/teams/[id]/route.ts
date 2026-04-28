@@ -5,9 +5,12 @@ import { requireAuth } from '@/lib/auth-helpers';
 export const runtime = 'edge';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   const env = getEnv();
   const { id } = await params;
   const teamId = parseInt(id, 10);

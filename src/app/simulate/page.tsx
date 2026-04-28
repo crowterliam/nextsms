@@ -8,6 +8,7 @@ import {
   StatsTable,
 } from '@/components/match-report';
 import type { MatchEventDisplay, PlayerStats } from '@/components/match-report';
+import { safeFetch } from '@/lib/fetch';
 
 interface Team {
   id: number;
@@ -50,7 +51,7 @@ export default function SimulatePage() {
     setSimulating(true);
     setResult(null);
     try {
-      const res = await fetch('/api/simulate', {
+      const res = await safeFetch('/api/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

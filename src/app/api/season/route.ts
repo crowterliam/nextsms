@@ -6,7 +6,7 @@ import { simulateMatch } from '@/lib/simulator';
 import { configToLeagueConfig } from '@/lib/config';
 import { DEFAULT_CONFIG } from '@/lib/types';
 import type { Player, LeagueConfig, SimPlayer } from '@/lib/types';
-import { requireAuth } from '@/lib/auth-helpers';
+import { requireAuth, parseJsonBody } from '@/lib/auth-helpers';
 
 export const runtime = 'edge';
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const env = getEnv();
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { action, season } = body as { action: string; season?: number };
   const seasonNum = season || 1;
 
@@ -161,7 +161,7 @@ async function recoverFitness(env: CloudflareEnv, season: number) {
   const afterInjury = config.updtr_fitness_after_injury;
 
   await env.DB.prepare(
-    'UPDATE players SET fitness = CASE WHEN injury > 0 THEN ? WHEN fitness + ? > 100 THEN 100 ELSE fitness + ? END'
+    'UPDATE players SET fitness = CASE WHEN injury > 0 THEN ? WHEN fitness + ? > 100 THEN 100 ELSE fitness + ? END WHERE team_id IN (SELECT id FROM teams)'
   ).bind(afterInjury, gain, gain).run();
 
   return NextResponse.json({ success: true, message: `Fitness recovered by ${gain}. Injured players set to ${afterInjury}.` });

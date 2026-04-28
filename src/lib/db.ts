@@ -262,8 +262,10 @@ export async function updateSavedLineup(db: D1Database, id: number, teamId: numb
 }
 
 export async function activateLineup(db: D1Database, id: number, teamId: number) {
-  await db.prepare('UPDATE team_saved_lineups SET is_active = 0 WHERE team_id = ?').bind(teamId).run();
-  return db.prepare('UPDATE team_saved_lineups SET is_active = 1, updated_at = datetime(\'now\') WHERE id = ? AND team_id = ?').bind(id, teamId).run();
+  return db.batch([
+    db.prepare('UPDATE team_saved_lineups SET is_active = 0 WHERE team_id = ?').bind(teamId),
+    db.prepare("UPDATE team_saved_lineups SET is_active = 1, updated_at = datetime('now') WHERE id = ? AND team_id = ?").bind(id, teamId),
+  ]);
 }
 
 export async function deleteSavedLineup(db: D1Database, id: number, teamId: number) {

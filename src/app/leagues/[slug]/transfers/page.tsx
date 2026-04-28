@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Team {
   id: number;
@@ -178,7 +179,7 @@ export default function TransferMarketPage() {
 
   const rejectOffer = async (offerId: number) => {
     try {
-      await fetch(`/api/leagues/${slug}/transfers`, {
+      await safeFetch(`/api/leagues/${slug}/transfers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reject_offer', offer_id: offerId }),

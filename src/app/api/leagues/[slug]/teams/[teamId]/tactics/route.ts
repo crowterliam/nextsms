@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth, requireLeagueMember, requireTeamManager } from '@/lib/auth-helpers';
+import { requireAuth, requireLeagueMember, requireTeamManager, parseJsonBody } from '@/lib/auth-helpers';
 import { getTeamTactics, upsertTeamTactic, deleteTeamTactic } from '@/lib/db';
 
 const VALID_TACTICS = new Set(['N', 'D', 'A', 'C', 'L', 'P']);
@@ -47,7 +47,7 @@ export async function POST(
   const { error: memberError } = await requireTeamManager(request, league.id, user!.id, teamId);
   if (memberError) return memberError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { tactic_code, aggression, is_default } = body as {
     tactic_code: string;
     aggression: number;
@@ -62,7 +62,7 @@ export async function POST(
   if (!VALID_TACTICS.has(tc)) {
     return NextResponse.json({ error: 'Invalid tactic_code' }, { status: 400 });
   }
-  if (typeof aggression !== 'number' || aggression < 0 || aggression > 100) {
+  if (typeof aggression !== 'number' || !Number.isInteger(aggression) || aggression < 0 || aggression > 100) {
     return NextResponse.json({ error: 'Aggression must be 0-100' }, { status: 400 });
   }
 
@@ -89,7 +89,7 @@ export async function DELETE(
   const { error: memberError } = await requireTeamManager(request, league.id, user!.id, teamId);
   if (memberError) return memberError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { tactic_id } = body as { tactic_id: number };
   if (typeof tactic_id !== 'number' || tactic_id <= 0) return NextResponse.json({ error: 'tactic_id required' }, { status: 400 });
 

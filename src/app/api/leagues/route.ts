@@ -4,6 +4,7 @@ import {
   requireAuth,
   getLeagueDO,
   requireLeagueMember,
+  parseJsonBody,
 } from "@/lib/auth-helpers";
 
 export const runtime = "edge";
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   const { error: authError, user } = await requireAuth(request);
   if (authError) return authError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { name, slug } = body as { name: string; slug: string };
 
   if (!name || !slug) {
@@ -59,6 +60,13 @@ export async function POST(request: Request) {
       { error: "name and slug required" },
       { status: 400 }
     );
+  }
+
+  if (name.length > 100) {
+    return NextResponse.json({ error: 'League name must be 100 characters or less' }, { status: 400 });
+  }
+  if (slug.length < 2 || slug.length > 50) {
+    return NextResponse.json({ error: 'Slug must be 2-50 characters' }, { status: 400 });
   }
 
   if (!/^[a-z0-9-]+$/.test(slug)) {
@@ -109,7 +117,7 @@ export async function DELETE(request: Request) {
   const { error: authError, user } = await requireAuth(request);
   if (authError) return authError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { leagueId } = body as { leagueId: string };
   if (!leagueId) {
     return NextResponse.json(

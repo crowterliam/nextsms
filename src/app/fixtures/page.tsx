@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Fixture {
   id: number;
@@ -55,7 +56,7 @@ export default function FixturesPage() {
     setAdvancing(true);
     setWeekResult(null);
     try {
-      const res = await fetch('/api/season', {
+      const res = await safeFetch('/api/season', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'advance_week', season: 1 }),

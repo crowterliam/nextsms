@@ -151,7 +151,7 @@ async function doImport(
   if (rosterFiles.length > 0) {
     for (const file of rosterFiles) {
       const text = await file.text();
-      let abbr = file.name.replace(/\.txt$/i, '').toLowerCase();
+      let abbr = file.name.replace(/\.txt$/i, '').replace(/[./\\]/g, '').toLowerCase();
 
       const parsed = parseLegacyRoster(text);
       const fullname = abbreviations[abbr] || abbr;

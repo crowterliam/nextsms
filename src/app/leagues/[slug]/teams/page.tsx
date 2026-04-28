@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { safeFetch } from '@/lib/fetch';
 
 interface Team {
   id: number;
@@ -114,7 +115,7 @@ export default function LeagueTeamsPage() {
   const handleDelete = async (teamId: number) => {
     if (!confirm('Delete this team and all its players?')) return;
     try {
-      await fetch(`/api/leagues/${slug}/teams`, {
+      await safeFetch(`/api/leagues/${slug}/teams`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamId }),

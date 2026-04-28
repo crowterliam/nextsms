@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth } from '@/lib/auth-helpers';
+import { requireAuth, parseJsonBody } from '@/lib/auth-helpers';
 import {
   getPendingInvitationsForUser, getInvitation, updateInvitationStatus,
   addLeagueMember, assignTeamManager,
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const env = getEnv();
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { invitation_id, action } = body as { invitation_id: string; action: string };
 
   if (!invitation_id || typeof invitation_id !== 'string') {

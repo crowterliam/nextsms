@@ -5,7 +5,7 @@ import { simulateMatch } from '@/lib/simulator';
 import { configToLeagueConfig } from '@/lib/config';
 import type { Player, LineupPlayer, ConditionalInstruction, LeagueConfig } from '@/lib/types';
 import { DEFAULT_CONFIG } from '@/lib/types';
-import { requireAuth } from '@/lib/auth-helpers';
+import { requireAuth, parseJsonBody } from '@/lib/auth-helpers';
 
 interface TeamRow {
   id: number;
@@ -15,7 +15,10 @@ interface TeamRow {
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { error: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   const env = getEnv();
   const result = await getMatches(env.DB, 100);
   return NextResponse.json(result.results);
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const env = getEnv();
-  const body = await request.json();
+  const body = await parseJsonBody(request);
 
   if (body.action === 'simulate') {
     return handleSimulate(env, body);

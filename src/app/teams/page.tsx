@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { safeFetch } from '@/lib/fetch';
 
 interface Team {
   id: number;
@@ -68,7 +69,7 @@ export default function TeamsPage() {
 
   const createTeam = async () => {
     if (!newName || !newAbbr) return;
-    const res = await fetch('/api/teams', {
+    const res = await safeFetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'generate_roster', name: newName, abbreviation: newAbbr.toUpperCase() }),
@@ -84,7 +85,7 @@ export default function TeamsPage() {
 
   const deleteTeam = async (id: number) => {
     if (!confirm('Delete this team and all its players?')) return;
-    await fetch(`/api/teams/${id}`, { method: 'DELETE' });
+    await safeFetch(`/api/teams/${id}`, { method: 'DELETE' });
     if (selectedTeam === id) { setSelectedTeam(null); setPlayers([]); }
     setTeams(teams.filter(t => t.id !== id));
   };

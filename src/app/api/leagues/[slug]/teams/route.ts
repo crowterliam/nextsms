@@ -4,6 +4,8 @@ import {
   requireAuth,
   getLeagueDO,
   requireLeagueAdmin,
+  requireLeagueMember,
+  parseJsonBody,
 } from "@/lib/auth-helpers";
 
 const PLACEHOLDER_TEAM_NAMES = [
@@ -73,7 +75,7 @@ export async function POST(
   );
   if (adminError) return adminError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
 
   if (body.action === "generate_placeholder") {
     const count = typeof body.count === "number" && body.count > 0 && body.count <= 20
@@ -134,6 +136,10 @@ export async function POST(
     );
   }
 
+  if (name.length > 100 || abbreviation.length > 10) {
+    return NextResponse.json({ error: 'Name must be 100 chars or less, abbreviation 10 chars or less' }, { status: 400 });
+  }
+
   const doStub = getLeagueDO(slug);
   const result = await doStub.addTeam(name, abbreviation, league.id, manager_user_id);
   if (result.success && manager_user_id) {
@@ -170,9 +176,9 @@ export async function DELETE(
   );
   if (adminError) return adminError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { teamId } = body as { teamId: number };
-  if (!teamId) {
+  if (typeof teamId !== 'number' || teamId <= 0) {
     return NextResponse.json(
       { error: "teamId required" },
       { status: 400 }
@@ -182,27 +188,4 @@ export async function DELETE(
   const doStub = getLeagueDO(slug);
   const result = await doStub.removeTeam(teamId);
   return NextResponse.json(result);
-}
-
-async function requireLeagueMember(
-  request: Request,
-  leagueId: string,
-  userId: string
-) {
-  const env = getEnv();
-  const member = await env.DB.prepare(
-    "SELECT role FROM league_members WHERE league_id = ? AND user_id = ?"
-  )
-    .bind(leagueId, userId)
-    .first<{ role: string }>();
-
-  if (!member) {
-    return {
-      error: NextResponse.json(
-        { error: "Not a member of this league" },
-        { status: 403 }
-      ),
-    };
-  }
-  return { error: null };
 }

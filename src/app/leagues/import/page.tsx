@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useSession } from '@/lib/auth-client';
+import { safeFetch } from '@/lib/fetch';
 
 interface ImportResult {
   success: boolean;
@@ -49,7 +50,7 @@ export default function ImportPage() {
     if (tableFile) formData.append('table', tableFile);
 
     try {
-      const res = await fetch('/api/leagues/import', { method: 'POST', body: formData });
+      const res = await safeFetch('/api/leagues/import', { method: 'POST', body: formData });
       const data = await res.json();
       setResult(data);
     } catch {

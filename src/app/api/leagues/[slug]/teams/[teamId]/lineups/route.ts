@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth, requireLeagueMember, requireTeamManager } from '@/lib/auth-helpers';
+import { requireAuth, requireLeagueMember, requireTeamManager, parseJsonBody } from '@/lib/auth-helpers';
 import {
   getSavedLineups, saveLineup, updateSavedLineup, activateLineup, deleteSavedLineup,
   getPlayers, getTeam,
 } from '@/lib/db';
 import { createTeamsheet, teamsheetToLineup } from '@/lib/teamsheet-creator';
 import type { Player } from '@/lib/types';
+
+const VALID_TACTICS = new Set(['N', 'D', 'A', 'C', 'L', 'P']);
 
 export const runtime = 'edge';
 
@@ -50,7 +52,7 @@ export async function POST(
   const { error: memberError } = await requireTeamManager(request, league.id, user!.id, teamId);
   if (memberError) return memberError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
 
   if (body.action === 'auto_generate') {
     const formation = (body.formation as string) || '442';
@@ -155,6 +157,9 @@ export async function POST(
 
   if (!name || !formation || !tactic_code || !lineup) {
     return NextResponse.json({ error: 'name, formation, tactic_code, lineup required' }, { status: 400 });
+  }
+  if (!VALID_TACTICS.has(tactic_code.toUpperCase())) {
+    return NextResponse.json({ error: 'Invalid tactic_code' }, { status: 400 });
   }
 
   const lineupStr = typeof lineup === 'string' ? lineup : JSON.stringify(lineup);

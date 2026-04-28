@@ -158,12 +158,10 @@ export class LeagueDO extends DurableObject<CloudflareEnv> {
   }
 
   async removeTeam(teamId: number): Promise<{ success: boolean }> {
-    await this.env.DB.prepare("DELETE FROM players WHERE team_id = ?")
-      .bind(teamId)
-      .run();
-    await this.env.DB.prepare("DELETE FROM teams WHERE id = ?")
-      .bind(teamId)
-      .run();
+    await this.env.DB.batch([
+      this.env.DB.prepare("DELETE FROM players WHERE team_id = ?").bind(teamId),
+      this.env.DB.prepare("DELETE FROM teams WHERE id = ?").bind(teamId),
+    ]);
     return { success: true };
   }
 

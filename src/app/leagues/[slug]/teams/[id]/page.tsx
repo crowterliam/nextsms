@@ -12,6 +12,7 @@ import {
   TeamSettings,
 } from '@/components/team-detail';
 import type { Tab, TeamData, Player, Tactic, SavedLineup } from '@/components/team-detail';
+import { safeFetch } from '@/lib/fetch';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'squad', label: 'Squad' },
@@ -53,7 +54,7 @@ export default function TeamDetailPage() {
   useEffect(() => { fetchTeam(); }, [fetchTeam]);
 
   const saveSettings = async (formation: string, tactic: string, aggression: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ default_formation: formation, default_tactic: tactic, default_aggression: aggression }),
@@ -63,7 +64,7 @@ export default function TeamDetailPage() {
   };
 
   const listPlayerForTransfer = async (playerId: number, askingPrice: number) => {
-    await fetch(`/api/leagues/${slug}/transfers`, {
+    await safeFetch(`/api/leagues/${slug}/transfers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'list', player_id: playerId, team_id: team!.id, asking_price: askingPrice }),
@@ -72,7 +73,7 @@ export default function TeamDetailPage() {
   };
 
   const saveTactic = async (tacticCode: string, aggression: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/tactics`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/tactics`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tactic_code: tacticCode, aggression, is_default: tactics.length === 0 }),
@@ -81,7 +82,7 @@ export default function TeamDetailPage() {
   };
 
   const deleteTactic = async (tacticId: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/tactics`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/tactics`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tactic_id: tacticId }),
@@ -90,7 +91,7 @@ export default function TeamDetailPage() {
   };
 
   const generateLineup = async (formation: string, tacticCode: string, name: string, aggression: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'auto_generate', formation, tactic_code: tacticCode, name, aggression, set_active: true }),
@@ -99,7 +100,7 @@ export default function TeamDetailPage() {
   };
 
   const activateLineup = async (lineupId: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'activate', lineup_id: lineupId }),
@@ -108,7 +109,7 @@ export default function TeamDetailPage() {
   };
 
   const deleteLineup = async (lineupId: number) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', lineup_id: lineupId }),
@@ -117,7 +118,7 @@ export default function TeamDetailPage() {
   };
 
   const updateLineup = async (lineupId: number, updates: Record<string, unknown>) => {
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_lineup', lineup_id: lineupId, ...updates }),
@@ -132,7 +133,7 @@ export default function TeamDetailPage() {
     );
     items.push(rawInstruction);
 
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(items) }),
@@ -147,7 +148,7 @@ export default function TeamDetailPage() {
     );
     items.splice(index, 1);
 
-    await fetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
+    await safeFetch(`/api/leagues/${slug}/teams/${teamId}/lineups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_conditionals', lineup_id: lineup.id, conditionals: JSON.stringify(items) }),

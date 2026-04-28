@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { requireAuth, requireLeagueMember, requireTeamManager } from '@/lib/auth-helpers';
+import { requireAuth, requireLeagueMember, requireTeamManager, parseJsonBody } from '@/lib/auth-helpers';
 import {
   getTeam, getPlayers, getTeamTactics, getSavedLineups, getActiveLineup,
   updateTeamSettings,
@@ -66,7 +66,7 @@ export async function PATCH(
   const { error: memberError } = await requireTeamManager(request, league.id, user!.id, teamId);
   if (memberError) return memberError;
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const allowed = ['default_formation', 'default_tactic', 'default_aggression', 'name', 'abbreviation'];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {

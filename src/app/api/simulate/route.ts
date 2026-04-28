@@ -5,7 +5,7 @@ import { createTeamsheet, teamsheetToLineup } from '@/lib/teamsheet-creator';
 import { simulateMatch } from '@/lib/simulator';
 import { DEFAULT_CONFIG } from '@/lib/types';
 import type { Player } from '@/lib/types';
-import { requireAuth } from '@/lib/auth-helpers';
+import { requireAuth, parseJsonBody } from '@/lib/auth-helpers';
 
 interface TeamRow {
   id: number;
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const env = getEnv();
-  const body = await request.json();
+  const body = await parseJsonBody(request);
   const { home_team_id, away_team_id, seed } = body as Record<string, unknown>;
 
   if (typeof home_team_id !== 'number' || home_team_id <= 0 || typeof away_team_id !== 'number' || away_team_id <= 0) {
