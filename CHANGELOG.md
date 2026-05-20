@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Fixed CVE-2026-6321 / GHSA-q3j6-qgpj-74h6: fast-uri path traversal via percent-encoded dot segments (upgraded to 3.1.2)
+- Fixed CVE-2026-6322 / GHSA-v39h-62p7-jpjc: fast-uri host confusion via percent-encoded authority delimiters (upgraded to 3.1.2)
+- Fixed CVE-2026-44635 / GHSA-pv5w-4p9q-p3v2: Kysely JSON-path traversal injection in `JSONPathBuilder` (upgraded to 0.28.17)
+- Added branch protection on `master`: requires CI pass, no force pushes, no deletions
+- Added Dependabot configuration for weekly npm and GitHub Actions dependency updates
+- Added CI workflow with lint, typecheck, and security audit checks
+- Added CODEOWNERS file for change review ownership
+- Updated SECURITY.md with comprehensive vulnerability reporting policy and security controls documentation
+- `.npmrc` added to `.gitignore` to prevent accidental registry token exposure
+
 - Full security audit conducted across all 36 API routes, middleware, auth, and client components (30 findings)
 - Middleware now enforces default-deny authentication: unauthenticated requests to non-public routes return 401 (API) or redirect to login (pages)
 - CSRF protection added via `X-Requested-With` header requirement on all state-changing requests (POST/PUT/PATCH/DELETE)
