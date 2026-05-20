@@ -48,6 +48,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run npm audit
+      - name: Run pnpm audit
         run: |
-          npm audit --audit-level=high --json || true
+          pnpm audit --audit-level=high || true
