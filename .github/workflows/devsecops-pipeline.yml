@@ -24,7 +24,7 @@ jobs:
 
     steps:
       # Fetch project source with GitHub Actions Checkout. Use either v3 or v4.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Run the "semgrep ci" command on the command line of the docker image.
       - run: semgrep ci
         env:
@@ -38,7 +38,7 @@ jobs:
     steps:
       # Updated to v5 to support Node 24
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # 1. SCA & License Compliance: OSV-Scanner
       - name: OSV-Scanner (CVEs & Licenses)
