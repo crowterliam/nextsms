@@ -15,7 +15,7 @@
     "start:vinext": "vinext start"
   },
   "dependencies": {
-    "better-auth": "^1.6.9",
+    "better-auth": "^1.6.13",
     "kysely": "^0.28.17",
     "react": "19.2.5",
     "react-dom": "19.2.5"
