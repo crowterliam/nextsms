@@ -21,22 +21,22 @@
     "react-dom": "19.2.5"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.33.2",
+    "@cloudflare/vite-plugin": "^1.44.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
-    "@vitejs/plugin-react": "^6.0.1",
-    "@vitejs/plugin-rsc": "^0.5.24",
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-rsc": "^0.5.27",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
-    "react-server-dom-webpack": "^19.2.5",
+    "react-server-dom-webpack": "^19.2.7",
     "tailwindcss": "^4",
     "typescript": "^5.7.4",
-    "vinext": "^0.0.44",
-    "vite": "^8.0.10",
-    "wrangler": "^4.85.0"
+    "vinext": "^0.2.1",
+    "vite": "^8.1.4",
+    "wrangler": "^4.110.0"
   },
   "type": "module"
 }
