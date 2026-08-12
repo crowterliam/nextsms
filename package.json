@@ -1,6 +1,6 @@
 {
   "name": "nextsms",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "license": "AGPL-3.0",
   "private": false,
   "scripts": {
@@ -15,28 +15,38 @@
     "start:vinext": "vinext start"
   },
   "dependencies": {
-    "better-auth": "^1.6.9",
+    "better-auth": "^1.6.27",
     "kysely": "^0.28.17",
-    "react": "19.2.5",
-    "react-dom": "19.2.5"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.33.2",
-    "@eslint/eslintrc": "^3",
+    "@cloudflare/vite-plugin": "^1.51.3",
+    "@eslint/eslintrc": "^3.3.6",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitejs/plugin-rsc": "^0.5.24",
+    "@vitejs/plugin-rsc": "^0.5.34",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
-    "react-server-dom-webpack": "^19.2.5",
+    "react-server-dom-webpack": "^19.2.8",
     "tailwindcss": "^4",
     "typescript": "^5.7.4",
     "vinext": "^0.0.44",
-    "vite": "^8.0.10",
-    "wrangler": "^4.85.0"
+    "vite": "^8.0.16",
+    "wrangler": "^4.121.0"
   },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@1": "1.1.18",
+      "brace-expansion@5": "5.0.9",
+      "fast-uri": "3.1.5",
+      "js-yaml": "^4.3.1",
+      "nanoid@3": "3.3.18"
+    }
+  },
+  "packageManager": "pnpm@10.33.3",
   "type": "module"
 }
