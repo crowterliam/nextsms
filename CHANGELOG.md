@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Set `packageManager` to `pnpm@10.33.3` so CI `pnpm/action-setup` can resolve a version
+
 ### Security
 
+- Upgraded `better-auth` to 1.6.27 (fixes CVE-2026-53512 / GHSA-pw9m-5jxm-xr6h and related better-auth advisories)
+- Upgraded React RSC stack to 19.2.8 and `@vitejs/plugin-rsc` to 0.5.34 (DoS advisories in Server Components)
+- Upgraded Vite to ≥8.0.16 and Cloudflare tooling (`wrangler`, `@cloudflare/vite-plugin`) to clear `ws` / `undici` / `sharp` highs
+- Added pnpm overrides for transitive highs: `brace-expansion`, `fast-uri`, `js-yaml`, `nanoid`
 - Fixed CVE-2026-6321 / GHSA-q3j6-qgpj-74h6: fast-uri path traversal via percent-encoded dot segments (upgraded to 3.1.2)
 - Fixed CVE-2026-6322 / GHSA-v39h-62p7-jpjc: fast-uri host confusion via percent-encoded authority delimiters (upgraded to 3.1.2)
 - Fixed CVE-2026-44635 / GHSA-pv5w-4p9q-p3v2: Kysely JSON-path traversal injection in `JSONPathBuilder` (upgraded to 0.28.17)

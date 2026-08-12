@@ -24,7 +24,7 @@ export function createAuth() {
       },
     },
     advanced: {
-      cookieOptions: {
+      defaultCookieAttributes: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
